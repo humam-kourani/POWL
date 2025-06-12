@@ -1,3 +1,4 @@
 pm4py
 graphviz
 rustxes
+streamlit
