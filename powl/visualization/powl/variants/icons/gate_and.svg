@@ -1,0 +1,9 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+ "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg width="3000" height="3000" viewBox="0 0 3000 3000" xmlns="http://www.w3.org/2000/svg">
+  <!-- Vertical bar of the plus -->
+  <rect x="1400" y="900" width="200" height="1200" fill="#000000"/>
+  <!-- Horizontal bar of the plus -->
+  <rect x="900" y="1400" width="1200" height="200" fill="#000000"/>
+</svg>
