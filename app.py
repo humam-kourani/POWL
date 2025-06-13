@@ -27,7 +27,7 @@ def run_app():
     st.title('🔍 POWL Miner')
 
     st.subheader(
-        "Process Discovery with the Partially Ordered Workflow Language"
+        "Process Mining with the Partially Ordered Workflow Language"
     )
 
     temp_dir = "temp"
