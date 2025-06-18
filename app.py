@@ -16,6 +16,10 @@ from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
+import matplotlib.pyplot as plt
+from networkx.readwrite import json_graph
+
+
 
 
 class ViewType(Enum):
@@ -93,29 +97,9 @@ def run_app():
         try:
             st.write("Export Model")
             powl_model = st.session_state['model_gen']
-            bpmn_converter(powl_model)
-            attributes = dir(powl_model)
-            # Print what every attribute does
-            st.write("Attributes of the POWL model:")
-            for attr in attributes:
-                # Apply it and print the result
-                try:
-                    result = getattr(powl_model, attr)
-                    if callable(result):
-                        st.write(f"{attr}() - Method")
-                        # Write the result of the method call
-                    else:
-                        st.write(f"{attr} - {result}")
-                except Exception as e:
-                    st.write(f"{attr} - Error: {str(e)}")
-            for child in powl_model.children:
-                st.write(f"Child: {child}")
-                st.write(type(child))
-                try:
-                    st.write(f"Order: {child.order}")
-                except AttributeError:
-                    st.write("Order: Not available for this child")
-            print(powl_model._children)
+            model = bpmn_converter(powl_model)
+            print(f"POWL Model: {model.nodes}")
+
             pn, im, fm = powl.convert_to_petri_net(powl_model)
             bpmn = convert_to_bpmn(pn, im, fm)
             bpmn = bpmn_layouter.apply(bpmn)
