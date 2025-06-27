@@ -139,3 +139,6 @@ powl_to_bpmn.pickel
 
 # Jupyter Notebook
 *.ipynb
+
+# Environment files
+*.yaml
