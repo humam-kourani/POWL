@@ -10,6 +10,9 @@ from pm4py.util.pandas_utils import check_is_pandas_dataframe, check_pandas_data
 from pm4py.utils import get_properties
 from powl.conversion.converter import apply as powl_converter
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
+from pm4py.objects.bpmn.layout import layouter
+from powl.conversion.variants.to_bpmn import apply as bpmn_converter
+
 
 
 def import_event_log(path: str) -> pd.DataFrame:
@@ -119,8 +122,6 @@ def convert_to_petri_net(powl: POWL):
 
 
 def convert_to_bpmn(powl: POWL):
-    pn, im, fm = powl_converter(powl)
-    bpmn = pm4py.convert_to_bpmn(pn, im, fm)
-    from pm4py.objects.bpmn.layout import layouter
+    bpmn = bpmn_converter(powl_model)
     bpmn = layouter.apply(bpmn)
     return bpmn
