@@ -508,13 +508,13 @@ def apply(powl):
     resulting_graph = expand_model(powl, G)
     resulting_graph = __postprocess_graph(resulting_graph)
     try:
-        bpmn = __transform_to_bpmn_new(resulting_graph)
+        bpmn = __transform_to_bpmn(resulting_graph)
     except Exception as e:
         raise ValueError(f"Error transforming graph to BPMN: {e}")
     return bpmn
 
 
-def __transform_to_bpmn_new(G):
+def __transform_to_bpmn(G):
     """
     Transform the graph G into a BPMN file.
     """
