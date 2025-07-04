@@ -581,19 +581,33 @@ def __transform_to_bpmn(G):
         if "Start" in str(node):
             hashed_id = f"StartEvent_{hashed_id}"
             object = bpmn.StartEvent(id=hashed_id)
+
         elif "End" in str(node):
             hashed_id = f"EndEvent_{hashed_id}"
             object = bpmn.EndEvent(id=hashed_id)
+
         elif "Parallel" in str(node):
             hashed_id = f"ParallelGateway_{hashed_id}"
             object = bpmn.ParallelGateway(id=hashed_id)
+
         elif "Exclusive" in str(node):
             hashed_id = f"ExclusiveGateway_{hashed_id}"
             object = bpmn.ExclusiveGateway(id=hashed_id)
+
+        elif "Intermediate" in str(node):
+
+            if "Catch" in str(node):
+                hashed_id = f"IntermediateCatchEvent_{hashed_id}"
+                object = bpmn.IntermediateCatchEvent(id=hashed_id, name=str(attrs.get("content", "")))
+
+            elif "Throw" in str(node):
+                hashed_id = f"IntermediateThrowEvent_{hashed_id}"
+                object = bpmn.IntermediateThrowEvent(id=hashed_id, name=str(attrs.get("content", "")))
         else:
             # tasks
             hashed_id = f"Task_{hashed_id}"
             object = bpmn.Task(id=hashed_id, name=str(attrs.get("content", "")))
+            
         node_object_mapping[node] = object
         for incoming in node_dict[node]["incoming"]:
             if incoming not in node_object_mapping:
