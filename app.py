@@ -91,7 +91,7 @@ def run_app():
 
         st.write("Export Model")
         powl_model = st.session_state["model_gen"]
-        bpmn = bpmn_converter(powl_model)
+        bpmn, _ = bpmn_converter(powl_model)
         layouted_bpmn = bpmn_layouter.apply(bpmn)
 
         try:
@@ -99,10 +99,9 @@ def run_app():
 
             download_1, download_2 = st.columns(2)
             with download_1:
-                bpmn_data = get_xml_string(
-                    bpmn, parameters={"encoding": constants.DEFAULT_ENCODING}
-                )
-                bpmn_data = export_petri_as_string(pn, im, fm)
+                bpmn_data =  get_xml_string(layouted_bpmn,
+                                parameters={"encoding": constants.DEFAULT_ENCODING})
+
                 st.download_button(
                     label="Download BPMN",
                     data=bpmn_data,

@@ -71,13 +71,13 @@ def __handle_operator_powl(powl_content: OperatorPOWL) -> nx.DiGraph:
         G.add_node(
             diverging_gateway,
             type="diverging",
-            paired_with=converging_gateway,
+            paired_with=[converging_gateway],
             visited=True,
         )
         G.add_node(
             converging_gateway,
             type="converging",
-            paired_with=diverging_gateway,
+            paired_with=[diverging_gateway],
             visited=True,
         )
         # Handle the edges now
@@ -203,7 +203,7 @@ def __add_auxiliary_nodes_before_after(
             else f"ParallelGateway_{hash(node)}_beforenode"
         )
         if gateway not in G.nodes:
-            G.add_node(gateway, type=type, paired_with=hash(node), visited=True)
+            G.add_node(gateway, type=type, paired_with=[hash(node)], visited=True)
         G.add_edge(gateway, hash(node))
 
         # Add one exclusive gateway after it and connect it
@@ -258,13 +258,13 @@ def __handle_StrictPartialOrder(powl_content: StrictPartialOrder) -> nx.DiGraph:
     G.add_node(
         diverging_gateway,
         type="diverging",
-        paired_with=converging_gateway,
+        paired_with=[converging_gateway],
         visited=True,
     )
     G.add_node(
         converging_gateway,
         type="converging",
-        paired_with=diverging_gateway,
+        paired_with=[diverging_gateway],
         visited=True,
     )
 
@@ -456,6 +456,54 @@ def expand_model(powl, G: nx.DiGraph):
         G = expand_model(content, G)
     return G
 
+def __update_paired_with_relation(G: nx.DiGraph, gateway_to_remove, successor):
+    """
+    Update the paired_with relation for gateways in the graph.
+
+    Parameters
+    ----------
+    G : nx.DiGraph
+        The directed graph.
+    gateway_to_remove : str
+        The gateway to remove.
+    successor : str
+        The successor node to connect to the paired gateway.
+    """
+    current_gateway = G.nodes[gateway_to_remove]
+    if "paired_with" in current_gateway:
+        paired_with = current_gateway["paired_with"]
+        if isinstance(paired_with, list):
+            for paired_gateway in paired_with:
+                # find the paired gateway in the graph and update its list
+                if 'Gateway' not in str(paired_gateway):
+                    # We only want to update gateways, not tasks
+                    continue
+                paired_node = G.nodes.get(paired_gateway, None)
+                if paired_node is not None:
+                    if "paired_with" in paired_node:
+                        # If the paired gateway has a list, append the successor
+                        if isinstance(paired_node["paired_with"], list):
+                            paired_node["paired_with"].append(successor)
+                        else:
+                            # If it is not a list, convert it to a list
+                            paired_node["paired_with"] = [paired_node["paired_with"], successor]
+                    else:
+                        # If it does not have a paired_with attribute, create it
+                        paired_node["paired_with"] = [successor]
+                    # Remove current gateway from the paired_with list
+                    if paired_gateway in paired_node["paired_with"]:
+                        paired_node["paired_with"].remove(paired_gateway)
+                    # Add it to the successor's paired_with list
+                    if "paired_with" in G.nodes[successor]:
+                        if isinstance(G.nodes[successor]["paired_with"], list):
+                            G.nodes[successor]["paired_with"].append(paired_gateway)
+                        else:
+                            G.nodes[successor]["paired_with"] = [
+                                G.nodes[successor]["paired_with"], paired_gateway
+                            ]
+                    else:
+                        G.nodes[successor]["paired_with"] = [paired_gateway]
+    return G
 
 def __postprocess_graph(G: nx.DiGraph) -> nx.DiGraph:
     G_copy = G.copy()
@@ -473,6 +521,7 @@ def __postprocess_graph(G: nx.DiGraph) -> nx.DiGraph:
             successors = list(G_copy.successors(gateway))
             if len(predecessors) == 1 and len(successors) == 1:
                 # We can merge them
+                G_copy = __update_paired_with_relation(G_copy, gateway, successors[0])
                 G_copy.add_edge(predecessors[0], successors[0])
                 G_copy.remove_node(gateway)
         # Check if G and G_copy are the same
@@ -511,7 +560,7 @@ def apply(powl):
         bpmn = __transform_to_bpmn(resulting_graph)
     except Exception as e:
         raise ValueError(f"Error transforming graph to BPMN: {e}")
-    return bpmn
+    return bpmn, resulting_graph
 
 
 def __transform_to_bpmn(G):
@@ -528,17 +577,23 @@ def __transform_to_bpmn(G):
 
     for node, attrs in G.nodes(data=True):
         object = None
+        hashed_id = str(hash(str(node)))
         if "Start" in str(node):
-            object = bpmn.StartEvent()
+            hashed_id = f"StartEvent_{hashed_id}"
+            object = bpmn.StartEvent(id=hashed_id)
         elif "End" in str(node):
-            object = bpmn.EndEvent()
+            hashed_id = f"EndEvent_{hashed_id}"
+            object = bpmn.EndEvent(id=hashed_id)
         elif "Parallel" in str(node):
-            object = bpmn.ParallelGateway()
+            hashed_id = f"ParallelGateway_{hashed_id}"
+            object = bpmn.ParallelGateway(id=hashed_id)
         elif "Exclusive" in str(node):
-            object = bpmn.ExclusiveGateway()
+            hashed_id = f"ExclusiveGateway_{hashed_id}"
+            object = bpmn.ExclusiveGateway(id=hashed_id)
         else:
             # tasks
-            object = bpmn.Task(name=str(attrs.get("content", "")))
+            hashed_id = f"Task_{hashed_id}"
+            object = bpmn.Task(id=hashed_id, name=str(attrs.get("content", "")))
         node_object_mapping[node] = object
         for incoming in node_dict[node]["incoming"]:
             if incoming not in node_object_mapping:
@@ -560,5 +615,6 @@ def __transform_to_bpmn(G):
             bpmn.add_flow(seq_flow)
             object.add_out_arc(seq_flow)
         bpmn.add_node(object)
+
 
     return bpmn

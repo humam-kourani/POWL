@@ -122,6 +122,6 @@ def convert_to_petri_net(powl: POWL):
 
 
 def convert_to_bpmn(powl: POWL):
-    bpmn = bpmn_converter(powl_model)
+    bpmn, _ = bpmn_converter(powl_model)
     bpmn = layouter.apply(bpmn)
     return bpmn
