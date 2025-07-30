@@ -79,7 +79,7 @@ def get_color(node, color_map):
 
 
 def get_id_base(powl):
-    if isinstance(powl, Transition):
+    if isinstance(powl, Transition) or isinstance(powl, StartNode) or isinstance(powl, EndNode):
         return str(id(powl))
     if isinstance(powl, OperatorPOWL):
         for node in powl.children:
@@ -92,11 +92,11 @@ def get_id_base(powl):
         for node in powl.children:
             return get_id_base(node)
     else:
-        raise Exception("Unknown POWL type!")
+        raise Exception(f"Unknown POWL type {type(powl)}!")
 
 
 def get_id(powl):
-    if isinstance(powl, Transition):
+    if isinstance(powl, Transition) or isinstance(powl, StartNode) or isinstance(powl, EndNode):
         return str(id(powl))
     elif isinstance(powl, OperatorPOWL):
         if OPERATOR_BOXES:
@@ -108,7 +108,7 @@ def get_id(powl):
     elif isinstance(powl, DecisionGraph):
         return "cluster_" + str(id(powl))
     else:
-        raise Exception("Unknown POWL type!")
+        raise Exception(f"Unknown POWL type {type(powl)}!")
 
 
 def add_operator_edge(vis, current_node_id, child, directory='none', style=""):
