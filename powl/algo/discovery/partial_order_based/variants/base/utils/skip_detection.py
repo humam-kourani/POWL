@@ -31,15 +31,17 @@ class SkipMiner:
 
             new_frozenset = frozenset(graph_id_list)
 
-            number_supersets = 0
-            for key in graph_ids_lists_to_nodes.keys():
-                if len(key) < n and new_frozenset.issubset(key):
-                    number_supersets = number_supersets + 1
-                    last_superset = key
-            if number_supersets == 1:
-                graph_ids_lists_to_nodes[last_superset].append(node_id)
-            else:
-                graph_ids_lists_to_nodes[new_frozenset].append(node_id)
+            graph_ids_lists_to_nodes[new_frozenset].append(node_id)
+
+            # number_supersets = 0
+            # for key in graph_ids_lists_to_nodes.keys():
+            #     if len(key) < n and new_frozenset.issubset(key):
+            #         number_supersets = number_supersets + 1
+            #         last_superset = key
+            # if number_supersets == 1:
+            #     graph_ids_lists_to_nodes[last_superset].append(node_id)
+            # else:
+            #     graph_ids_lists_to_nodes[new_frozenset].append(node_id)
 
 
         res_dict = {}

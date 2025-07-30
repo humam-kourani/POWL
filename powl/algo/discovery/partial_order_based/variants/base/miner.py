@@ -1,7 +1,8 @@
 from powl.algo.discovery.partial_order_based.utils.combine_order import combine_orders
-from powl.algo.discovery.partial_order_based.utils.constants import ENABLE_LOOP_DETECTION, ENABLE_XOR_DETECTION
 from powl.algo.discovery.partial_order_based.utils.simplified_objects import Skip, Graph, LOOP, XOR, ActivityInstance, \
     generate_powl, SelfLoop, get_leaves
+from powl.algo.discovery.partial_order_based.variants.base.utils.constants import ENABLE_LOOP_DETECTION, \
+    ENABLE_XOR_DETECTION
 from powl.algo.discovery.partial_order_based.variants.base.utils.mapping import apply_node_mapping_on_single_graph, \
     find_self_loops
 from powl.algo.discovery.partial_order_based.variants.base.utils.skip_detection import SkipMiner
