@@ -2,3 +2,6 @@ pm4py
 graphviz
 rustxes
 streamlit
+networkx
+pm4py
+rustxes
