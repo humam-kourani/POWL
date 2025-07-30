@@ -72,7 +72,7 @@ def run_app():
                 with tempfile.NamedTemporaryFile(mode="wb", delete=False,
                                                  dir=temp_dir, suffix=uploaded_log.name) as temp_file:
                     temp_file.write(contents)
-                    log = powl.import_event_log(temp_file.name)
+                log = powl.import_event_log(temp_file.name)
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
                 process_model = powl.discover(log, dfg_frequency_filtering_threshold=threshold)

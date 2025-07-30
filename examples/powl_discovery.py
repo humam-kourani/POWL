@@ -13,7 +13,7 @@ def execute_script():
     powl.view(model)
 
     # Export visualization
-    powl.save_visualization_net(model, file_path=r"C:\Users\kourani\Downloads\test_save.svg", use_frequency_tags=False)
+    powl.save_visualization(model, file_path=r"../examples/powl_vis.svg")
 
     # Convert into a PM4Py Petri net
     petri_net, initial_marking, final_marking = powl.convert_to_petri_net(model)
