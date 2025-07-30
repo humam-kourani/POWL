@@ -35,6 +35,7 @@ class XOR:
 
 class Skip(XOR):
     _allow_init = False
+
     def __init__(self, element):
         if not Skip._allow_init:
             raise RuntimeError("You must use create() to create this object!")
@@ -46,13 +47,17 @@ class Skip(XOR):
         if isinstance(element, Skip) or isinstance(element, SkipSelfLoop):
             instance = element
         elif isinstance(element, SelfLoop):
-            return SkipSelfLoop(element.element)
+            return SkipSelfLoop.create(element.element)
         else:
             cls._allow_init = True
             instance = cls(element)
             cls._allow_init = False
 
         return instance
+
+    @property
+    def allow_init(self):
+        return self._allow_init
 
 
 class LOOP:
@@ -83,17 +88,26 @@ class LOOP:
 
 
 class SelfLoop(LOOP):
+    _allow_init = False
+
     def __init__(self, element):
-        if isinstance(element, SelfLoop):
-            element = element.element
-            super().__init__(element, ActivityInstance(None, 1))
-        elif isinstance(element, Skip) or isinstance(element, SkipSelfLoop):
-            self.__class__ = SkipSelfLoop
-            element = element.element
-            super().__init__(ActivityInstance(None, 1), element)
-        else:
-            super().__init__(element, ActivityInstance(None, 1))
+        if not SelfLoop._allow_init:
+            raise RuntimeError("You must use create() to create this object!")
+        super().__init__(element, ActivityInstance(None, 1))
         self.element = element
+
+
+    @classmethod
+    def create(cls, element):
+        if isinstance(element, SelfLoop):
+            return element
+        elif isinstance(element, Skip) or isinstance(element, SkipSelfLoop):
+            return SkipSelfLoop.create(element.element)
+        else:
+            cls._allow_init = True
+            instance = cls(element)
+            cls._allow_init = False
+            return instance
 
 
 class SkipSelfLoop(LOOP):
@@ -102,6 +116,10 @@ class SkipSelfLoop(LOOP):
             element = element.element
         super().__init__(ActivityInstance(None, 1), element)
         self.element = element
+
+    @classmethod
+    def create(cls, element):
+        return cls(element)
 
 
 class ActivityInstance:

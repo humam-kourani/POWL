@@ -47,7 +47,7 @@ def _mine(orders):
             activity_label = all_activity_labels.pop()
             activity = ActivityInstance(activity_label, 1)
             if any(len(order.nodes) > 1 for order in orders):
-                return SelfLoop(activity)
+                return SelfLoop.create(activity)
             else:
                 return activity
 
@@ -70,7 +70,7 @@ def _mine(orders):
                             raise ValueError("Duplicate activity label")
                         label_mapping[activity_label] = model
 
-        orders = XORMiner.apply_mapping(orders, label_mapping)
+            orders = XORMiner.apply_mapping(orders, label_mapping)
 
 
     mapping_skips, new_nodes_counter = SkipMiner.find_skips(orders)
@@ -97,7 +97,5 @@ def _mine(orders):
 
 def apply(partial_orders):
     order = _mine(partial_orders)
-    print("✅ Done Mining!")
     powl = generate_powl(order)
-    print("✅ Done Conversion!")
     return powl

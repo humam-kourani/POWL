@@ -20,6 +20,8 @@ def combine_orders(orders):
                 else:
                     conflicts_bits[ui] |= (1 << vi)
 
+    for i in range(n):
+        edges_bits[i] &= ~conflicts_bits[i]
 
     # Transitive closure with Floyd–Warshall algorithm
     for k in range(n):

@@ -46,10 +46,10 @@ class SkipMiner:
 
         res_dict = {}
         new_nodes_counter = defaultdict(int)
-        for graph_id_list, node_id_list in graph_ids_lists_to_nodes.items():
-            if len(graph_id_list) == n:
-                pass
-            else:
+        if len(graph_ids_lists_to_nodes.keys()) == 1:
+            pass
+        else:
+            for graph_id_list, node_id_list in graph_ids_lists_to_nodes.items():
                 all_projections = []
                 for graph_id in graph_id_list:
                     graph = partial_orders[graph_id]
@@ -62,9 +62,11 @@ class SkipMiner:
                 from powl.algo.discovery.partial_order_based.variants.base.miner import _mine
                 new_graph = _mine(all_projections)
 
-                xor = Skip.create(new_graph)
-                new_node = xor
-
+                if len(graph_id_list) < n:
+                    xor = Skip.create(new_graph)
+                    new_node = xor
+                else:
+                    new_node = new_graph
 
                 for node_id in node_id_list:
                     node = all_nodes[node_id]
