@@ -1,3 +1,5 @@
+import warnings
+
 import pandas as pd
 import pm4py
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
@@ -38,7 +40,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     Discovers a POWL model from an event log.
 
     Reference paper:
-    Kourani, Humam, and Sebastiaan J. van Zelst. "POWL: partially ordered workflow language." International Conference on Business Process Management. Cham: Springer Nature Switzerland, 2023.
+    H Kourani, G Park, WMP van der Aalst. "Unlocking Non-Block-Structured Decisions: Inductive Mining with Choice Graphs" arXiv preprint arXiv:2505.07052.
 
     :param keep_only_completion_events:
     :param lifecycle_key:
@@ -86,6 +88,41 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
 
     from powl.algo.discovery import algorithm as powl_discovery
     return powl_discovery.apply(log, variant=variant, parameters=properties)
+
+
+def discover_from_partially_ordered_log(log: pd.DataFrame,
+      activity_key: str = "concept:name",
+      order_key: str = "time:timestamp",
+      case_id_key: str = "case:concept:name",
+      lifecycle_key: str = "lifecycle:transition"
+      ) -> POWL:
+    """
+    Discovers a POWL model from a partially ordered event log.
+
+    Reference paper:
+    H Kourani, G Park, WMP van der Aalst. "Revealing Inherent Concurrency in Event Data: A Partial Order Approach to Process Discovery"
+
+    :param log: event log / Pandas dataframe
+    :param activity_key: attribute to be used for the activity
+    :param order_key: attribute to be used for ordering events within traces
+    :param case_id_key: attribute to be used as case identifier
+    :param lifecycle_key: attribute to be used as lifecycle identifier
+    :rtype: ``POWL``
+    """
+    complete_tags = {"complete", "COMPLETE", "Complete"}
+    start_tags = {"complete", "COMPLETE", "Complete"}
+
+    from powl.algo.discovery.partial_order_based.utils import log_to_partial_orders
+    partial_orders = log_to_partial_orders.apply(log,
+                                                 case_id_col=case_id_key,
+                                                 activity_col=activity_key,
+                                                 ordering_col=order_key,
+                                                 lifecycle_col=lifecycle_key,
+                                                 start_transitions=start_tags,
+                                                 complete_transitions=complete_tags)
+    from powl.algo.discovery.partial_order_based.variants.base import miner
+    powl = miner.apply(partial_orders)
+    return powl
 
 
 def view(powl: POWL, use_frequency_tags=True):

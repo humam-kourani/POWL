@@ -94,7 +94,7 @@ def _mine(orders):
     return order
 
 
-def mine_powl_from_partial_orders(partial_orders):
+def apply(partial_orders):
     order = _mine(partial_orders)
     print("✅ Done Mining!")
     powl = generate_powl(order)
