@@ -3,5 +3,3 @@ graphviz
 rustxes
 streamlit
 networkx
-pm4py
-rustxes
