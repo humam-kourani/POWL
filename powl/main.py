@@ -94,7 +94,7 @@ def discover_from_partially_ordered_log(log: pd.DataFrame,
       activity_key: str = "concept:name",
       order_key: str = "time:timestamp",
       case_id_key: str = "case:concept:name",
-      lifecycle_key: str = "lifecycle:transition"
+      lifecycle_key: str|None = "lifecycle:transition"
       ) -> POWL:
     """
     Discovers a POWL model from a partially ordered event log.

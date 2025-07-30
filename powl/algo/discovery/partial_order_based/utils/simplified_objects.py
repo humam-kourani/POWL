@@ -208,9 +208,9 @@ def _simplified_model_to_powl(model, add_instance_number = False):
             label = model.label
         return Transition(label=label)
     elif isinstance(model, XOR):
-        return OperatorPOWL(operator=Operator.XOR, children=[simplified_model_to_powl(child) for child in model.children])
+        return OperatorPOWL(operator=Operator.XOR, children=[_simplified_model_to_powl(child) for child in model.children])
     elif isinstance(model, LOOP):
-        return OperatorPOWL(operator=Operator.LOOP, children=[simplified_model_to_powl(model.body), simplified_model_to_powl(model.redo)])
+        return OperatorPOWL(operator=Operator.LOOP, children=[_simplified_model_to_powl(model.body), _simplified_model_to_powl(model.redo)])
     elif not isinstance(model, Graph):
         raise NotImplementedError
 
@@ -221,7 +221,7 @@ def _simplified_model_to_powl(model, add_instance_number = False):
 
     powl_map = {}
     for submodel in submodels:
-        powl_child = simplified_model_to_powl(submodel)
+        powl_child = _simplified_model_to_powl(submodel)
         powl_map[submodel] = powl_child
         po.order.add_node(powl_child)
 

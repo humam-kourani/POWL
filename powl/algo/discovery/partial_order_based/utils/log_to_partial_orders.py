@@ -74,6 +74,10 @@ def apply(
     if not isinstance(df, pd.DataFrame):
         raise TypeError("Input 'log' must be a Pandas DataFrame.")
 
+    for col in [activity_col, ordering_col, case_id_col]:
+        if col not in df.columns:
+            raise ValueError(f"Column '{col}' not found in the event table!")
+
     if lifecycle_col:
         if lifecycle_col in df.columns:
             complete_log = df[df['lifecycle:transition'].isin(complete_transitions)]

@@ -13,6 +13,10 @@ def find_self_loops(mapping, new_nodes_counter):
     tagged_node_element_map = defaultdict(list)
 
     for node in reversed_mapping.keys():
+        if isinstance(node, Skip) or isinstance(node, SelfLoop) or isinstance(node, SkipSelfLoop):
+            pass
+        else:
+            continue
         tagged_node_element_map[node.element].append(node)
 
     processed_keys = set()

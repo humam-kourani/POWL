@@ -66,7 +66,7 @@ class XORMiner:
     def project_partial_orders_on_groups(cls, partial_orders, group):
         res = []
         for graph in partial_orders:
-            new_nodes = frozenset([n for n in graph.nodes if get_activity(n).issubset(group)])
+            new_nodes = frozenset([n for n in graph.nodes if get_leaves(n).issubset(group)])
             if len(new_nodes) == 0:
                 continue
             new_edges = frozenset([(s, t) for (s, t) in graph.edges if s in new_nodes and t in new_nodes])
