@@ -226,7 +226,7 @@ def _simplified_model_to_powl(model, add_instance_number = False):
         po.order.add_node(powl_child)
 
     for m1, m2 in edges:
-        po.add_edge(powl_map[m1], powl_map[m2])
+        po.order.add_edge(powl_map[m1], powl_map[m2])
 
     len_all = len(po.order.nodes)
 
@@ -235,14 +235,14 @@ def _simplified_model_to_powl(model, add_instance_number = False):
         start = SilentTransition()
         po.order.add_node(start)
         for node in set(po.order.nodes) - {start}:
-            po.add_edge(start, node)
+            po.order.add_edge(start, node)
 
     end_len = len(po.order.get_end_nodes())
     if end_len > 1 and end_len != len_all:
         end = SilentTransition()
         po.order.add_node(end)
         for node in set(po.order.nodes) - {end}:
-            po.add_edge(node, end)
+            po.order.add_edge(node, end)
 
     if not po.order.is_irreflexive():
         raise ValueError('Not irreflexive!')
@@ -254,5 +254,5 @@ def _simplified_model_to_powl(model, add_instance_number = False):
 
 
 def generate_powl(model, add_instance_number = False):
-    powl = _simplified_model_to_powl(model, add_instance_number = False)
+    powl = _simplified_model_to_powl(model, add_instance_number = add_instance_number)
     return powl.simplify()
