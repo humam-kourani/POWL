@@ -110,7 +110,7 @@ def discover_from_partially_ordered_log(log: pd.DataFrame,
     :rtype: ``POWL``
     """
     complete_tags = {"complete", "COMPLETE", "Complete"}
-    start_tags = {"complete", "COMPLETE", "Complete"}
+    start_tags = {"start", "START", "Start"}
 
     from powl.algo.discovery.partial_order_based.utils import log_to_partial_orders
     partial_orders = log_to_partial_orders.apply(log,
