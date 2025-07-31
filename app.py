@@ -50,7 +50,7 @@ def run_app():
 
     with st.form(key='model_gen_form'):
 
-        uploaded_log = st.file_uploader("For **process model discovery**, upload an event log:",
+        uploaded_log = st.file_uploader("For **process model total_order_based**, upload an event log:",
                                         type=["csv", "xes", "gz"],
                                         help="Supported file types: csv, xes, xes.gz")
         threshold = st.number_input(
@@ -80,7 +80,7 @@ def run_app():
                 st.session_state['model_gen'] = process_model
             except Exception as e:
                 shutil.rmtree(temp_dir, ignore_errors=True)
-                st.error(body=f"Error during discovery: {e}", icon="⚠️")
+                st.error(body=f"Error during total_order_based: {e}", icon="⚠️")
                 return
 
 

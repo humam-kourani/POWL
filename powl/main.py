@@ -3,10 +3,10 @@ import warnings
 import pandas as pd
 import pm4py
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
-from powl.algo.discovery.inductive.utils.filtering import FILTERING_THRESHOLD
-from powl.algo.discovery.inductive.variants.dynamic_clustering_frequency.dynamic_clustering_frequency_partial_order_cut import \
+from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING_THRESHOLD
+from powl.discovery.total_order_based.inductive.variants.dynamic_clustering_frequency.dynamic_clustering_frequency_partial_order_cut import \
     ORDER_FREQUENCY_RATIO
-from powl.algo.discovery.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
+from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
 from powl.objects.obj import POWL
 from pm4py.util.pandas_utils import check_is_pandas_dataframe, check_pandas_dataframe_columns
 from pm4py.utils import get_properties
@@ -68,10 +68,8 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     :param case_id_key: attribute to be used as case identifier
     :rtype: ``POWL``
     """
-    if check_is_pandas_dataframe(log):
-        check_pandas_dataframe_columns(
-            log, activity_key=activity_key, timestamp_key=timestamp_key, case_id_key=case_id_key)
 
+    log = log.sort_values([case_id_key, timestamp_key])
     properties = get_properties(log, activity_key=activity_key, timestamp_key=timestamp_key)
 
     if keep_only_completion_events and lifecycle_key in log.columns:
@@ -79,7 +77,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
         if len(filtered_log) > 0:
             log = filtered_log
 
-    from powl.algo.discovery.inductive.utils.filtering import FILTERING_TYPE, FilteringType
+    from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING_TYPE, FilteringType
 
     num_filters = 0
     if order_graph_filtering_threshold is not None:
@@ -100,7 +98,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     if num_filters > 1:
         raise Exception("The algorithm can only be used with one filtering threshold at a time!")
 
-    from powl.algo.discovery import algorithm as powl_discovery
+    from powl.discovery.total_order_based import algorithm as powl_discovery
     return powl_discovery.apply(log, variant=variant, parameters=properties)
 
 
@@ -126,7 +124,7 @@ def discover_from_partially_ordered_log(log: pd.DataFrame,
     complete_tags = {"complete", "COMPLETE", "Complete"}
     start_tags = {"start", "START", "Start"}
 
-    from powl.algo.discovery.partial_order_based.utils import log_to_partial_orders
+    from powl.discovery.partial_order_based.utils import log_to_partial_orders
     partial_orders = log_to_partial_orders.apply(log,
                                                  case_id_col=case_id_key,
                                                  activity_col=activity_key,
@@ -134,7 +132,7 @@ def discover_from_partially_ordered_log(log: pd.DataFrame,
                                                  lifecycle_col=lifecycle_key,
                                                  start_transitions=start_tags,
                                                  complete_transitions=complete_tags)
-    from powl.algo.discovery.partial_order_based.variants.base import miner
+    from powl.discovery.partial_order_based.variants.base import miner
     powl = miner.apply(partial_orders)
     return powl
 
