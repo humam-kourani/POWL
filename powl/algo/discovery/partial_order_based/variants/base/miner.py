@@ -5,7 +5,7 @@ from powl.algo.discovery.partial_order_based.variants.base.utils.constants impor
     ENABLE_XOR_DETECTION
 from powl.algo.discovery.partial_order_based.variants.base.utils.mapping import apply_node_mapping_on_single_graph, \
     find_self_loops
-from powl.algo.discovery.partial_order_based.variants.base.utils.skip_detection import SkipMiner
+from powl.algo.discovery.partial_order_based.variants.base.utils.node_grouping import NodeGrouping
 from powl.algo.discovery.partial_order_based.variants.base.utils.xor_detection import XORMiner
 
 
@@ -73,7 +73,7 @@ def _mine(orders):
             orders = XORMiner.apply_mapping(orders, label_mapping)
 
 
-    mapping_skips, new_nodes_counter = SkipMiner.find_skips(orders)
+    mapping_skips, new_nodes_counter = NodeGrouping.find_groups(orders)
     if ENABLE_LOOP_DETECTION:
         node_mapping = find_self_loops(mapping_skips, new_nodes_counter)
     else:

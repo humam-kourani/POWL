@@ -4,10 +4,10 @@ from powl.algo.discovery.partial_order_based.utils.constants import VARIANT_FREQ
 from powl.algo.discovery.partial_order_based.utils.simplified_objects import Graph, Skip
 
 
-class SkipMiner:
+class NodeGrouping:
 
     @classmethod
-    def find_skips(cls, partial_orders):
+    def find_groups(cls, partial_orders):
 
         partial_orders = list(partial_orders)
         node_to_orders = defaultdict(list)
@@ -32,17 +32,6 @@ class SkipMiner:
             new_frozenset = frozenset(graph_id_list)
 
             graph_ids_lists_to_nodes[new_frozenset].append(node_id)
-
-            # number_supersets = 0
-            # for key in graph_ids_lists_to_nodes.keys():
-            #     if len(key) < n and new_frozenset.issubset(key):
-            #         number_supersets = number_supersets + 1
-            #         last_superset = key
-            # if number_supersets == 1:
-            #     graph_ids_lists_to_nodes[last_superset].append(node_id)
-            # else:
-            #     graph_ids_lists_to_nodes[new_frozenset].append(node_id)
-
 
         res_dict = {}
         new_nodes_counter = defaultdict(int)
