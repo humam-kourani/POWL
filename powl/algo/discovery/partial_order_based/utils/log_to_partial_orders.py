@@ -1,64 +1,84 @@
 import warnings
-from collections import deque, defaultdict
-from typing import List, Dict, Tuple, Any, Set
+from bisect import bisect_left
+from collections import defaultdict
+from typing import List, Any, Set
 import pandas as pd
 
 from powl.algo.discovery.partial_order_based.utils.constants import VARIANT_FREQUENCY_KEY
 from powl.algo.discovery.partial_order_based.utils.simplified_objects import ActivityInstance, Graph
+from powl.general_utils.time_utils import should_parse_column_as_date
 
 
 def generate_interval_df_fifo(
-    df: pd.DataFrame,
-    case_id_col: str, activity_col: str, ordering_col: str, lifecycle_col: str or None,
-    start_transitions: Set[str], complete_transitions: Set[str]
+        df: pd.DataFrame,
+        case_id_col: str, activity_col: str, ordering_col: str, lifecycle_col: str or None,
+        start_transitions: Set[str], complete_transitions: Set[str]
 ) -> pd.DataFrame:
-    work_df = df[[case_id_col, activity_col, ordering_col] + ([lifecycle_col] if lifecycle_col else [])].copy()
+
+    cols_to_keep = [case_id_col, activity_col, ordering_col]
+    if lifecycle_col:
+        cols_to_keep.append(lifecycle_col)
+    df_filtered = df[cols_to_keep].copy()
 
     if lifecycle_col:
-        work_df[lifecycle_col] = work_df[lifecycle_col].str.lower()
-    work_df = work_df.sort_values([case_id_col, ordering_col])
-    interval_list = []
-    for case_id, trace_df in work_df.groupby(case_id_col, sort=False):
-        activities_start: Dict[str, deque] = {}
-        activities_ids: Dict[str, int] = {}
-        for index, event in trace_df.iterrows():
-            activity_key = str(event[activity_col])
-            timestamp = event[ordering_col]
-            if lifecycle_col:
-                transition = event[lifecycle_col]
-                if transition in start_transitions:
-                    if activity_key not in activities_start:
-                        activities_start[activity_key] = deque()
-                    activities_start[activity_key].append({'timestamp': timestamp, 'event_index': index})
-                elif transition in complete_transitions:
-                    start_timestamp = timestamp
-                    if activity_key in activities_start and activities_start[activity_key]:
-                        start_timestamp = activities_start[activity_key].popleft()['timestamp']
-                    if activity_key not in activities_ids:
-                        activities_ids[activity_key] = 1
+        df_filtered = df_filtered.sort_values([case_id_col, ordering_col])
+
+        activity_col_idx = df_filtered.columns.get_loc(activity_col)
+        timestamp_col_idx = df_filtered.columns.get_loc(ordering_col)
+        lifecycle_col_idx = df_filtered.columns.get_loc(lifecycle_col)
+
+        all_intervals = []
+        grouped_by_case = df_filtered.groupby(case_id_col, sort=False)
+
+        for case_id, case_df in grouped_by_case:
+            pending_starts = defaultdict(list)
+            activity_instance_counter = defaultdict(int)
+
+            for event_tuple in case_df.itertuples(index=False, name=None):
+                activity_name = event_tuple[activity_col_idx]
+                timestamp = event_tuple[timestamp_col_idx]
+                lifecycle = event_tuple[lifecycle_col_idx]
+
+                if lifecycle in start_transitions:
+                    pending_starts[activity_name].append(timestamp)
+
+                elif lifecycle in complete_transitions:
+                    if pending_starts[activity_name]:
+                        start_timestamp = pending_starts[activity_name].pop(0)
                     else:
-                        activities_ids[activity_key] = activities_ids[activity_key] + 1
-                    activity_instance = ActivityInstance(activity_key, activities_ids[activity_key])
-                    interval_record = { case_id_col: case_id, 'activity': activity_instance, 'start_timestamp': start_timestamp, 'end_timestamp': timestamp}
-                    interval_list.append(interval_record)
-            else:
-                if activity_key not in activities_ids:
-                    activities_ids[activity_key] = 1
-                else:
-                    activities_ids[activity_key] = activities_ids[activity_key] + 1
-                activity_instance = ActivityInstance(activity_key, activities_ids[activity_key])
-                interval_record = {case_id_col: case_id, 'activity': activity_instance,
-                                   'start_timestamp': timestamp, 'end_timestamp': timestamp}
-                interval_list.append(interval_record)
-    if not interval_list:
+                        start_timestamp = timestamp
+                    activity_instance_counter[activity_name] += 1
+                    all_intervals.append({
+                        case_id_col: case_id,
+                        'activity': ActivityInstance(activity_name, activity_instance_counter[activity_name]),
+                        'start_timestamp': start_timestamp,
+                        'end_timestamp': timestamp
+                    })
+
+        interval_df = pd.DataFrame(all_intervals) if all_intervals else pd.DataFrame()
+
+    else:
+        # No lifecycle: each event is an atomic interval
+        df_filtered = df_filtered.sort_values([case_id_col, ordering_col])
+        group_cols = [case_id_col, activity_col]
+        df_filtered['instance_id'] = df_filtered.groupby(group_cols).cumcount()
+
+        df_filtered['activity'] = [ActivityInstance(act, inst + 1) for act, inst in
+                                   zip(df_filtered[activity_col], df_filtered['instance_id'])]
+        df_filtered['start_timestamp'] = df_filtered[ordering_col]
+        df_filtered['end_timestamp'] = df_filtered[ordering_col]
+
+        interval_df = df_filtered[[case_id_col, 'activity', 'start_timestamp', 'end_timestamp']]
+
+    if interval_df.empty:
         return pd.DataFrame()
-    interval_df = pd.DataFrame(interval_list)
-    interval_df['start_timestamp'] = pd.to_datetime(interval_df['start_timestamp'], utc=True)
-    interval_df['end_timestamp'] = pd.to_datetime(interval_df['end_timestamp'], utc=True)
+
+    # Sort for consistent output and to aid the next processing step
     interval_df = interval_df.sort_values([case_id_col, 'start_timestamp', 'end_timestamp']).reset_index(drop=True)
     interval_df['event_instance_id'] = interval_df.index
     print(f"Successfully created {len(interval_df)} activity intervals using FIFO logic.")
     return interval_df
+
 
 
 def apply(
@@ -88,6 +108,9 @@ def apply(
             lifecycle_col = None
             warnings.warn(f'The event log does not contain any attribute with the lifecycle key "{lifecycle_col}"! All events will be considered during discovery!', category=UserWarning)
 
+    if should_parse_column_as_date(df, ordering_col):
+        df[ordering_col] = pd.to_datetime(df[ordering_col])
+
     interval_df = generate_interval_df_fifo(
         df, case_id_col, activity_col, ordering_col, lifecycle_col,
         start_transitions, complete_transitions
@@ -96,55 +119,41 @@ def apply(
     if interval_df.empty:
         raise Exception("Interval DataFrame is empty, no variants to generate.")
 
-    # calculate potential direct succession edges
-    merged_df = pd.merge(
-        interval_df[[case_id_col, 'activity', 'start_timestamp', 'end_timestamp', 'event_instance_id']],
-        interval_df[[case_id_col, 'activity', 'start_timestamp', 'end_timestamp', 'event_instance_id']],
-        on=case_id_col,
-        suffixes=('_1', '_2')
-    )
-    merged_df = merged_df[merged_df['event_instance_id_1'] != merged_df['event_instance_id_2']]
-    is_directly_followed = merged_df['start_timestamp_2'] > merged_df['end_timestamp_1']
-    direct_follows_edges_df = merged_df.loc[is_directly_followed, [case_id_col, 'activity_1', 'activity_2']].copy()
-
-    # Group edges by case for quick lookup later
-    edges_by_case = direct_follows_edges_df.groupby(case_id_col)[['activity_1', 'activity_2']].apply(
-        lambda g: tuple(sorted(zip(g['activity_1'], g['activity_2'])))
-    ).to_dict()  # Convert to dictionary {case_id: tuple_of_edges}
-
-    variants_data = defaultdict(lambda: {VARIANT_FREQUENCY_KEY: 0})
-
-    grouped_intervals = interval_df.groupby(case_id_col)
-    total_cases = len(grouped_intervals)
-    processed_cases = 0
+    variants_key_to_frequency = defaultdict(int)
+    interval_df = interval_df.sort_values([case_id_col, 'start_timestamp', 'end_timestamp']).reset_index(drop=True)
+    grouped_intervals = interval_df.groupby(case_id_col, sort=False)
 
     for case_id, trace_df in grouped_intervals:
         trace_activities_multiset = frozenset(trace_df['activity'].tolist())
 
-        trace_edges = frozenset(edges_by_case.get(case_id, tuple()))
+        trace_events = list(
+            trace_df[['activity', 'start_timestamp', 'end_timestamp']].itertuples(index=False, name=None))
+        events_sorted_by_end = sorted(trace_events, key=lambda x: x[2])
+        end_timestamps = [event[2] for event in events_sorted_by_end]
 
+        edges = []
+        for act_j, start_j, _ in trace_events:
+            pos = bisect_left(end_timestamps, start_j)
+            for i in range(pos):
+                act_i = events_sorted_by_end[i][0]
+                if act_i != act_j:
+                    edges.append((act_i, act_j))
+
+        trace_edges = frozenset(edges)
         variant_key = (trace_activities_multiset, trace_edges)
+        variants_key_to_frequency[variant_key] += 1
 
-        variants_data[variant_key][VARIANT_FREQUENCY_KEY] += 1
-        if 'structure' not in variants_data[variant_key]:
-            variants_data[variant_key]['structure'] = {'activities': trace_activities_multiset, 'edges': trace_edges}
+    print(f"Found {len(variants_key_to_frequency)} unique variants.")
 
-        processed_cases += 1
-        if processed_cases % 1000 == 0:
-            print(f"Processed {processed_cases}/{total_cases} cases for grouping...")
-
-    print(f"Found {len(variants_data)} unique variants.")
-
-    output_list = []
-    for variant_key, data in variants_data.items():
-        add_info = {
-            VARIANT_FREQUENCY_KEY: data[VARIANT_FREQUENCY_KEY],
-        }
-        order = Graph(variant_key[0], variant_key[1], add_info)
-        output_list.append(order)
+    output_list = [
+        Graph(variant_key[0], variant_key[1], {VARIANT_FREQUENCY_KEY: freq})
+        for variant_key, freq in variants_key_to_frequency.items()
+    ]
 
     output_list.sort(
         key=lambda x: x.additional_information[VARIANT_FREQUENCY_KEY],
-        reverse=True)
+        reverse=True
+    )
 
     return output_list
+

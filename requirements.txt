@@ -3,3 +3,4 @@ graphviz
 rustxes
 streamlit
 networkx
+bisect
