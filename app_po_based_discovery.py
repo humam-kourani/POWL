@@ -24,10 +24,10 @@ class ViewType(Enum):
 
 
 def run_app():
-    st.title('🔍 Partial Order Aware POWL Miner')
+    st.title('🔍 PO-Aware POWL Miner')
 
     st.subheader(
-        "Revealing Inherent Concurrency in Event Data: A Partial Order Approach to Process Discovery"
+        "Revealing Inherent Concurrency in Event Data:   A Partial Order Approach to Process Discovery"
     )
 
     temp_dir = "temp"
