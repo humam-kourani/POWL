@@ -14,16 +14,30 @@ from powl.conversion.converter import apply as powl_converter
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
 
 
-def import_event_log(path: str) -> pd.DataFrame:
+def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
     import rustxes
     if path.endswith(".xes") or path.endswith(".xes.gz"):
         [xes, log_attrs] = rustxes.import_xes(path)
         df = xes.to_pandas()
     elif path.endswith(".csv"):
-        df = pd.read_csv(path, keep_default_na=False, parse_dates=['time:timestamp'])
-        df = pm4py.format_dataframe(df)
+        cols_to_parse = []
+        df_sample = pd.read_csv(path, nrows=0)
+
+        if timestamp_key:
+            if timestamp_key not in df_sample.columns:
+                raise ValueError("Timestamp key not found in table!")
+        elif 'time:timestamp' in df_sample.columns:
+            timestamp_key =  'time:timestamp'
+            warnings.warn(f"No column given as a timestamp key! Default value 'time:timestamp' is used.")
+        else:
+            warnings.warn("No column given as a timestamp key! Timestamp column parsing is skipped!")
+
+        if timestamp_key:
+            cols_to_parse = [timestamp_key]
+
+        df = pd.read_csv(path, keep_default_na=False, parse_dates=cols_to_parse)
     else:
-        raise Exception("Unsupported file type!")
+        raise ValueError("Unsupported file type!")
     return df
 
 
