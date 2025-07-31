@@ -27,7 +27,7 @@ def run_app():
     st.title('🔍 PO-Aware POWL Miner')
 
     st.subheader(
-        "Revealing Inherent Concurrency in Event Data:   A Partial Order Approach to Process Discovery"
+        "A Partial Order Approach to Process Discovery"
     )
 
     temp_dir = "temp"
