@@ -4,7 +4,7 @@ import powl
 def execute_script():
 
     # Read event log (csv, xes, or xes.gz)
-    log = powl.import_event_log(r"../examples/running-example.csv")
+    log = powl.import_event_log(r"../examples/hospital.csv")
 
     # Discover POWL model
     model = powl.discover_from_partially_ordered_log(log)
