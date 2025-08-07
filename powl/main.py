@@ -1,5 +1,4 @@
 import warnings
-
 import pandas as pd
 import pm4py
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
@@ -8,10 +7,19 @@ from powl.discovery.total_order_based.inductive.variants.dynamic_clustering_freq
     ORDER_FREQUENCY_RATIO
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
 from powl.objects.obj import POWL
-from pm4py.util.pandas_utils import check_is_pandas_dataframe, check_pandas_dataframe_columns
+from pm4py.objects.ocel.obj import OCEL
 from pm4py.utils import get_properties
 from powl.conversion.converter import apply as powl_converter
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
+from powl.discovery.object_centric.algorithm import apply as oc_discovery
+
+
+def import_ocel(path: str) -> OCEL:
+    try:
+        ocel = pm4py.read_ocel2(path)
+    except Exception as e:
+        ocel = pm4py.read_ocel(path)
+    return ocel
 
 
 def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
@@ -39,7 +47,6 @@ def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
     else:
         raise ValueError("Unsupported file type!")
     return df
-
 
 
 def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
@@ -100,6 +107,10 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
 
     from powl.discovery.total_order_based import algorithm as powl_discovery
     return powl_discovery.apply(log, variant=variant, parameters=properties)
+
+
+def discover_petri_net_from_ocel(ocel: OCEL, parameters):
+    return oc_discovery(ocel, parameters=parameters)
 
 
 def discover_from_partially_ordered_log(log: pd.DataFrame,
