@@ -109,7 +109,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     return powl_discovery.apply(log, variant=variant, parameters=properties)
 
 
-def discover_petri_net_from_ocel(ocel: OCEL, parameters):
+def discover_petri_net_from_ocel(ocel: OCEL, parameters=None):
     return oc_discovery(ocel, parameters=parameters)
 
 
