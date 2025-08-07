@@ -2,7 +2,6 @@ from pm4py.objects.ocel.obj import OCEL
 from pm4py.algo.discovery.ocel.ocdfg.variants import classic as ocdfg_discovery
 from enum import Enum
 from pm4py.util import exec_utils
-from pm4py.objects.ocel import constants as ocel_constants
 from collections import Counter
 from typing import Optional, Dict, Any
 from pm4py.algo.conformance.tokenreplay import algorithm as token_based_replay
@@ -14,8 +13,6 @@ from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints
 
 
 class Parameters(Enum):
-    EVENT_ACTIVITY = ocel_constants.PARAM_EVENT_ACTIVITY
-    OBJECT_TYPE = ocel_constants.PARAM_OBJECT_TYPE
     POWL_MINER_VARIANT = "powl_miner_variant"
     DOUBLE_ARC_THRESHOLD = "double_arc_threshold"
     DIAGNOSTICS_WITH_TBR = "diagnostics_with_token_based_replay"
