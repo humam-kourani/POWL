@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 import pm4py
 from pm4py.objects.ocel.obj import OCEL
 
+import powl
 from powl.conversion.to_powl import from_tree
 from powl.discovery.object_centric.variants.oc_powl.utils.divergence_free_graph import get_divergence_free_graph
 from powl.discovery.object_centric.variants.oc_powl.utils.interaction_properties import get_interaction_patterns
@@ -27,8 +28,14 @@ def apply(
     div, con, rel, defi = get_interaction_patterns(oc_log.relations)
     df2_graph = get_divergence_free_graph(oc_log.relations,div,rel)
 
-    tree = pm4py.discover_process_tree_inductive(df2_graph)
-    powl_model = from_tree.apply(tree)
+    pm4py.view_dfg(df2_graph.graph, df2_graph.start_activities, df2_graph.end_activities)
+
+    # tree = pm4py.discover_process_tree_inductive(df2_graph)
+    # pm4py.view_process_tree(tree)
+    # powl_model = from_tree.apply(tree)
+
+    powl_model = powl.discover_from_dfg(df2_graph)
 
     oc_powl = OCPOWL(powl_model, rel,div, con, defi)
+
     return oc_powl

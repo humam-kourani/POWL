@@ -12,6 +12,8 @@ from pm4py.utils import get_properties
 from powl.conversion.converter import apply as powl_converter
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
 from powl.discovery.object_centric.algorithm import apply as oc_discovery
+from powl.discovery.dfg_based.algorithm import apply as dfg_discovery
+from pm4py.objects.dfg.obj import DFG
 
 
 def import_ocel(path: str) -> OCEL:
@@ -111,6 +113,10 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
 
 def discover_petri_net_from_ocel(ocel: OCEL, parameters=None):
     return oc_discovery(ocel, parameters=parameters)
+
+
+def discover_from_dfg(dfg: DFG, variant=POWLDiscoveryVariant.TREE, parameters=None):
+    return dfg_discovery(dfg, variant=variant, parameters=parameters)
 
 
 def discover_from_partially_ordered_log(log: pd.DataFrame,

@@ -3,8 +3,8 @@ from typing import Any, Optional, Dict, Tuple, List, Generic
 
 from pm4py.algo.discovery.inductive.base_case.abc import T
 from pm4py.algo.discovery.inductive.cuts.sequence import SequenceCut, SequenceCutUVCL, StrictSequenceCutUVCL, \
-    StrictSequenceCut
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+    StrictSequenceCut, SequenceCutDFG, StrictSequenceCutDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from powl.objects.obj import Sequence
 
 
@@ -33,4 +33,10 @@ class POWLSequenceCutUVCL(SequenceCutUVCL, POWLSequenceCut[IMDataStructureUVCL])
 
 
 class POWLStrictSequenceCutUVCL(StrictSequenceCutUVCL, StrictSequenceCut[IMDataStructureUVCL], POWLSequenceCutUVCL):
+    pass
+
+class POWLSequenceCutDFG(SequenceCutDFG, POWLSequenceCut[IMDataStructureDFG]):
+    pass
+
+class POWLStrictSequenceCutDFG(StrictSequenceCutDFG, StrictSequenceCut[IMDataStructureDFG], POWLSequenceCutDFG):
     pass
