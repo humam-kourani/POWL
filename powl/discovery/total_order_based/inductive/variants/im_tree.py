@@ -8,7 +8,7 @@ from pm4py.algo.discovery.inductive.variants.abc import InductiveMinerFramework
 from pm4py.util import exec_utils
 from pm4py.objects.dfg.obj import DFG
 
-from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph
+from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL
 from powl.discovery.total_order_based.inductive.fall_through.empty_traces import POWLEmptyTracesUVCL
 from powl.discovery.total_order_based.inductive.base_case.factory import BaseCaseFactory
 from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory
@@ -17,6 +17,7 @@ from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING
     filter_most_frequent_variants, FILTERING_THRESHOLD, filter_most_frequent_variants_with_decreasing_factor
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
 from powl.objects.BinaryRelation import BinaryRelation
+from pm4py.objects.process_tree.obj import Operator
 
 from copy import copy
 
@@ -130,9 +131,14 @@ class IMBasePOWL(Generic[T], InductiveMinerFramework[T]):
             end_nodes = [children[i] for i in range(len(powl.children)) if objs[i] in powl.end_nodes]
             empty_path = powl.order.is_edge(powl.start, powl.end)
             return DecisionGraph(new_order, start_nodes, end_nodes, empty_path=empty_path)
-        else:
+        elif isinstance(powl, OperatorPOWL):
+            if powl.operator == Operator.LOOP and len(children) > 2:
+                new_child = OperatorPOWL(Operator.XOR, children[1:])
+                children = [children[0], new_child]
             powl.children.extend(children)
             return powl
+        else:
+            raise Exception("Unsupported POWL type!")
 
     def __filter_dfg_noise(self, obj, noise_threshold):
         start_activities = copy(obj.dfg.start_activities)
