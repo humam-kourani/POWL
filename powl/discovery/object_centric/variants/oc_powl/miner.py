@@ -28,10 +28,14 @@ def apply(
     div, con, rel, defi = get_interaction_patterns(oc_log.relations)
     df2_graph = get_divergence_free_graph(oc_log.relations,div,rel)
 
-    pm4py.view_dfg(df2_graph.graph, df2_graph.start_activities, df2_graph.end_activities)
+    pm4py.view_dfg(df2_graph.graph, df2_graph.start_activities, df2_graph.end_activities, format='SVG')
+    import pickle
+    F = open(r"C:\Users\kourani\output.dump", "wb")
+    pickle.dump(df2_graph, F)
+    F.close()
 
-    # tree = pm4py.discover_process_tree_inductive(df2_graph)
-    # pm4py.view_process_tree(tree)
+    tree = pm4py.discover_process_tree_inductive(df2_graph)
+    pm4py.view_process_tree(tree, format='SVG')
     # powl_model = from_tree.apply(tree)
 
     powl_model = powl.discover_from_dfg(df2_graph)
