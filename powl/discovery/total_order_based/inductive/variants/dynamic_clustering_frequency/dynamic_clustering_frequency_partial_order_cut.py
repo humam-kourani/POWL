@@ -1,15 +1,16 @@
+from collections import Counter
 from itertools import product
 from abc import ABC
 from itertools import combinations
 from typing import Any, Optional, Dict, List, Generic, Tuple, Collection
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import StrictPartialOrder, POWL
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import \
-    project_on_groups_with_unique_activities
+    project_on_groups_with_unique_activities, MaximalPartialOrderCutDFG
 from pm4py.objects.dfg import util as dfu
 
 ORDER_FREQUENCY_RATIO = "order frequency ratio"
@@ -22,7 +23,26 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
 
     # Step 1: Generate Order based on the EFG
     po = BinaryRelation([tuple(c) for c in sorted(clusters)])
-    efg_freq = compute_efg_frequencies(obj, groups=po.nodes)
+    if type(obj) is IMDataStructureUVCL:
+        efg_freq = compute_efg_frequencies(obj, groups=po.nodes)
+    elif type(obj) is IMDataStructureDFG:
+        _, post_sets = dfu.get_transitive_relations(obj.dfg)
+        activity_to_cluster = {}
+        for cluster in po.nodes:
+            for activity in cluster:
+                activity_to_cluster[activity] = cluster
+        efg_freq = Counter()
+        seen_pairs = set()
+        for a, post_set in post_sets.items():
+            for b in post_set:
+                cluster_1 = activity_to_cluster.get(a)
+                cluster_2 = activity_to_cluster.get(b)
+                pair = (cluster_1, cluster_2)
+                if pair not in seen_pairs:
+                    efg_freq[pair] += 1
+                    seen_pairs.add(pair)
+    else:
+        raise NotImplementedError
 
     changed = False
     for i in range(len(po.nodes)):
@@ -170,3 +190,11 @@ class DynamicClusteringFrequencyPartialOrderCutUVCL(DynamicClusteringFrequencyPa
     def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
                 parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
         return project_on_groups_with_unique_activities(obj.data_structure, groups)
+
+
+class DynamicClusteringFrequencyPartialOrderCutDFG(DynamicClusteringFrequencyPartialOrderCut[IMDataStructureDFG]):
+
+    @classmethod
+    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
+                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+        return MaximalPartialOrderCutDFG.project(obj, groups, parameters)

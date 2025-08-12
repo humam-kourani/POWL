@@ -1,11 +1,12 @@
 from typing import List, Optional, Dict, Any, Tuple
 
 from powl.discovery.total_order_based.inductive.cuts.factory import T, CutFactory
-from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL
-from powl.discovery.total_order_based.inductive.cuts.xor import POWLExclusiveChoiceCutUVCL
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructure
+from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL, POWLLoopCutDFG
+from powl.discovery.total_order_based.inductive.cuts.sequence import POWLStrictSequenceCutDFG
+from powl.discovery.total_order_based.inductive.cuts.xor import POWLExclusiveChoiceCutUVCL, POWLExclusiveChoiceCutDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructure, IMDataStructureUVCL, IMDataStructureDFG
 from powl.discovery.total_order_based.inductive.variants.dynamic_clustering_frequency.dynamic_clustering_frequency_partial_order_cut import \
-    DynamicClusteringFrequencyPartialOrderCutUVCL
+    DynamicClusteringFrequencyPartialOrderCutUVCL, DynamicClusteringFrequencyPartialOrderCutDFG
 from powl.objects.obj import POWL
 from pm4py.objects.dfg import util as dfu
 
@@ -14,7 +15,13 @@ class CutFactoryPOWLDynamicClusteringFrequency(CutFactory):
 
     @classmethod
     def get_cuts(cls, obj, parameters=None):
-        return [POWLExclusiveChoiceCutUVCL, POWLLoopCutUVCL, DynamicClusteringFrequencyPartialOrderCutUVCL]
+        if type(obj) is IMDataStructureUVCL:
+            return [POWLExclusiveChoiceCutUVCL, POWLLoopCutUVCL, DynamicClusteringFrequencyPartialOrderCutUVCL]
+        elif type(obj) is IMDataStructureDFG:
+            return [POWLExclusiveChoiceCutDFG, POWLStrictSequenceCutDFG, POWLLoopCutDFG, DynamicClusteringFrequencyPartialOrderCutDFG]
+        else:
+            return []
+
 
     @classmethod
     def find_cut(cls, obj: IMDataStructure, parameters: Optional[Dict[str, Any]] = None) -> Optional[
