@@ -14,6 +14,8 @@ from typing import Optional, Dict, Any, Tuple
 import graphviz
 from pm4py.objects.log.obj import EventLog
 from collections import Counter
+from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.dfg import util as dfu
 
 
 class Parameters(Enum):
@@ -29,20 +31,14 @@ class Parameters(Enum):
     BGCOLOR = "bgcolor"
 
 
-def apply(dfg: Dict[Tuple[str, str], int], log: EventLog = None, parameters: Optional[Dict[Any, Any]] = None, activities_count : Dict[str, int] = None, serv_time: Dict[str, float] = None) -> graphviz.Digraph:
+def apply(dfg_obj: DFG, parameters: Optional[Dict[Any, Any]] = None) -> graphviz.Digraph:
     """
     Visualize a frequency directly-follows graph
 
     Parameters
     -----------------
-    dfg
-        Frequency Directly-follows graph
-    log
-        (if provided) Event log for the calculation of statistics
-    activities_count
-        (if provided) Dictionary associating to each activity the number of occurrences in the log.
-    serv_time
-        (if provided) Dictionary associating to each activity the average service time
+    dfg_obj
+        Directly-follows graph
     parameters
         Variant-specific parameters
 
@@ -54,51 +50,35 @@ def apply(dfg: Dict[Tuple[str, str], int], log: EventLog = None, parameters: Opt
     if parameters is None:
         parameters = {}
 
-    activity_key = exec_utils.get_param_value(Parameters.ACTIVITY_KEY, parameters, xes.DEFAULT_NAME_KEY)
-    image_format = exec_utils.get_param_value(Parameters.FORMAT, parameters, "png")
     max_no_of_edges_in_diagram = exec_utils.get_param_value(Parameters.MAX_NO_EDGES_IN_DIAGRAM, parameters, 100000)
-    start_activities = exec_utils.get_param_value(Parameters.START_ACTIVITIES, parameters, {})
-    end_activities = exec_utils.get_param_value(Parameters.END_ACTIVITIES, parameters, {})
     font_size = exec_utils.get_param_value(Parameters.FONT_SIZE, parameters, 32)
     font_size = str(font_size)
 
-    if start_activities is None:
-        start_activities = dict()
-    if end_activities is None:
-        end_activities = dict()
-    activities = sorted(list(set(dfg_utils.get_activities_from_dfg(dfg)).union(set(start_activities)).union(set(end_activities))))
+    dfg = dfg_obj.graph
+    start_activities = dfg_obj.start_activities
+    end_activities = dfg_obj.end_activities
+
+    activities = dfu.get_vertices(dfg_obj)
 
     rankdir = exec_utils.get_param_value(Parameters.RANKDIR, parameters, constants.DEFAULT_RANKDIR_GVIZ)
     bgcolor = exec_utils.get_param_value(Parameters.BGCOLOR, parameters, constants.DEFAULT_BGCOLOR)
 
-    if activities_count is None:
-        if log is not None:
-            activities_count = attr_get.get_attribute_values(log, activity_key, parameters=parameters)
-        else:
-            # the frequency of an activity in the log is at least the number of occurrences of
-            # incoming arcs in the DFG.
-            # if the frequency of the start activities nodes is also provided, use also that.
-            activities_count = Counter({key: 0 for key in activities})
-            for el in dfg:
-                activities_count[el[1]] += dfg[el]
-            if isinstance(start_activities, dict):
-                for act in start_activities:
-                    activities_count[act] += start_activities[act]
+    activities_count = Counter({key: 0 for key in activities})
+    for el in dfg:
+        activities_count[el[1]] += dfg[el]
+    if isinstance(start_activities, dict):
+        for act in start_activities:
+            activities_count[act] += start_activities[act]
 
-    if serv_time is None:
-        if log is not None:
-            serv_time = serv_time_get.apply(log, parameters=parameters)
-        else:
-            serv_time = {key: 0 for key in activities}
-
-    return graphviz_visualization(activities_count, dfg, image_format=image_format, measure="frequency",
+    return graphviz_visualization(activities_count, dfg, measure="frequency",
                                            max_no_of_edges_in_diagram=max_no_of_edges_in_diagram,
-                                           start_activities=start_activities, end_activities=end_activities, serv_time=serv_time,
+                                           start_activities=start_activities, end_activities=end_activities,
                                            font_size=font_size, bgcolor=bgcolor, rankdir=rankdir)
 
 
-def graphviz_visualization(activities_count, dfg, image_format="png", measure="frequency",
-                           max_no_of_edges_in_diagram=100000, start_activities=None, end_activities=None, serv_time=None,
+def graphviz_visualization(activities_count, dfg, start_activities, end_activities,
+                           measure="frequency",
+                           max_no_of_edges_in_diagram=100000,
                            font_size="12", bgcolor=constants.DEFAULT_BGCOLOR, rankdir=constants.DEFAULT_RANKDIR_GVIZ):
     """
     Do GraphViz visualization of a DFG graph
@@ -109,8 +89,6 @@ def graphviz_visualization(activities_count, dfg, image_format="png", measure="f
         Count of attributes in the log (may include attributes that are not in the DFG graph)
     dfg
         DFG graph
-    image_format
-        GraphViz should be represented in this format
     measure
         Describes which measure is assigned to edges in direcly follows graph (frequency/performance)
     max_no_of_edges_in_diagram
@@ -119,8 +97,6 @@ def graphviz_visualization(activities_count, dfg, image_format="png", measure="f
         Start activities of the log
     end_activities
         End activities of the log
-    serv_time
-        For each activity, the service time in the log
     font_size
         Size of the text on the activities/edges
     bgcolor
@@ -133,10 +109,6 @@ def graphviz_visualization(activities_count, dfg, image_format="png", measure="f
     viz
         Digraph object
     """
-    if start_activities is None:
-        start_activities = []
-    if end_activities is None:
-        end_activities = []
 
     filename = tempfile.NamedTemporaryFile(suffix='.gv')
     filename.close()
@@ -204,6 +176,6 @@ def graphviz_visualization(activities_count, dfg, image_format="png", measure="f
     viz.attr(overlap='false')
     viz.attr(fontsize='11')
 
-    viz.format = image_format.replace("html", "plain-ext")
+    viz.format = "SVG"
 
     return viz
