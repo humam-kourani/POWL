@@ -4,11 +4,14 @@ from itertools import combinations
 from typing import Any, Optional, Dict, List, Generic, Tuple, Collection
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import StrictPartialOrder, POWL
 from pm4py.objects.dfg import util as dfu
 from pm4py.statistics.eventually_follows.uvcl.get import apply as to_efg
+from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.dfg.util import get_transitive_relations
 
 
 def generate_initial_order(nodes, efg):
@@ -122,6 +125,14 @@ def cluster_order(binary_relation):
     return new_relation
 
 
+def get_efg(post_sets):
+    efg = Counter()
+    for a, post_set in post_sets.items():
+        for b in post_set:
+            efg[(a, b)] += 1
+    return efg
+
+
 class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
 
     @classmethod
@@ -131,13 +142,22 @@ class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
     @classmethod
     def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[BinaryRelation]:
 
-        efg = to_efg(obj)
-        alphabet = sorted(dfu.get_vertices(obj.dfg), key=lambda g: g.__str__())
+        dfg = obj.dfg
+
+        if type(obj) is IMDataStructureUVCL:
+            efg = to_efg(obj)
+        elif type(obj) is IMDataStructureDFG:
+            _, post_sets = get_transitive_relations(dfg)
+            efg = get_efg(post_sets)
+        else:
+            raise NotImplementedError
+
+        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
         po = generate_initial_order(alphabet, efg)
         clustered_po = cluster_order(po)
 
-        start_activities = set(list(obj.dfg.start_activities.keys()))
-        end_activities = set(list(obj.dfg.end_activities.keys()))
+        start_activities = set(list(dfg.start_activities.keys()))
+        end_activities = set(list(dfg.end_activities.keys()))
         if is_valid_order(clustered_po, efg, start_activities, end_activities):
             return clustered_po
         else:
@@ -182,4 +202,61 @@ class MaximalPartialOrderCutUVCL(MaximalPartialOrderCut[IMDataStructureUVCL]):
     @classmethod
     def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
                 parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
-        return project_on_groups_with_unique_activities(obj.data_structure, groups)
+        project_on_groups_with_unique_activities(obj.data_structure, groups)
+
+
+
+class MaximalPartialOrderCutDFG(MaximalPartialOrderCut[IMDataStructureDFG]):
+
+    @classmethod
+    def project(
+        cls,
+        obj: IMDataStructureDFG,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureDFG]:
+        """
+        For each group g:
+          - Keep only arcs (a,b) with a,b in g.
+          - Start counts in the projected DFG for activity x in g:
+                original_start[x] + sum_{y not in g} count(y -> x)
+          - End counts in the projected DFG for activity x in g:
+                original_end[x] + sum_{y not in g} count(x -> y)
+          - 'skip' is set to False (all blocks are required in a partial-order composition).
+        """
+        base = obj.dfg
+
+        act2grp: Dict[Any, int] = {}
+        for gi, g in enumerate(groups):
+            for a in g:
+                act2grp[a] = gi
+
+        dfgs: List[DFG] = [DFG() for _ in groups]
+        starts_from_out: List[Counter] = [Counter() for _ in groups]  # counts of y->x with y outside group
+        ends_to_out: List[Counter] = [Counter() for _ in groups]      # counts of x->y with y outside group
+
+        # internal arcs and cross-boundary starts/ends
+        for (a, b), count in base.graph.items():
+            gi = act2grp[a]
+            gj = act2grp[b]
+            if gi == gj:
+                dfgs[gi].graph[(a, b)] = count
+            else:
+                starts_from_out[gj][b] += count
+                ends_to_out[gi][a] += count
+
+        # start/end activities inside each projected DFG
+        for gi, g in enumerate(groups):
+            dfi = dfgs[gi]
+            for a in g:
+                start_count = starts_from_out[gi][a] + base.start_activities.get(a, 0)
+                end_count = ends_to_out[gi][a] + base.end_activities.get(a, 0)
+                if start_count > 0:
+                    dfi.start_activities[a] = start_count
+                if end_count > 0:
+                    dfi.end_activities[a] = end_count
+
+        return [
+            IMDataStructureDFG(InductiveDFG(dfg=dfgs[i], skip=False))
+            for i in range(len(dfgs))
+        ]

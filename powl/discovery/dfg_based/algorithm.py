@@ -1,6 +1,9 @@
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureDFG
 
+from powl.discovery.dfg_based.variants.dfg_im_maximal import DFGPOWLInductiveMinerMaximalOrder
 from powl.discovery.dfg_based.variants.dfg_im_tree import DFGIMBasePOWL
+from powl.discovery.dfg_based.variants.im_dynamic_clustering_frequencies import \
+    DFGPOWLInductiveMinerDynamicClusteringFrequency
 from powl.objects.obj import POWL
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
 from pm4py.objects.dfg.obj import DFG
@@ -13,14 +16,16 @@ from typing import Optional, Dict, Any, Type
 def get_variant(variant: POWLDiscoveryVariant) -> Type[DFGIMBasePOWL]:
     if variant == POWLDiscoveryVariant.TREE:
         return DFGIMBasePOWL
-    # elif variant == POWLDiscoveryVariant.DECISION_GRAPH_MAX:
-    #     return DFGPOWLInductiveMinerDecisionGraphMaximal
+    elif variant == POWLDiscoveryVariant.MAXIMAL:
+        return DFGPOWLInductiveMinerMaximalOrder
+    elif variant == POWLDiscoveryVariant.DYNAMIC_CLUSTERING:
+        return DFGPOWLInductiveMinerDynamicClusteringFrequency
     else:
         raise Exception('Invalid Variant!')
 
 
 def apply(dfg: DFG, parameters: Optional[Dict[Any, Any]] = None,
-          variant=POWLDiscoveryVariant.TREE) -> POWL:
+          variant=POWLDiscoveryVariant.MAXIMAL) -> POWL:
     if parameters is None:
         parameters = {}
 

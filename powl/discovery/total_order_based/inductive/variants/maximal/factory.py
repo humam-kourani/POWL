@@ -1,15 +1,15 @@
 from typing import List, Optional, Dict, Any, Tuple, Type
 
-from powl.discovery.total_order_based.inductive.cuts.concurrency import POWLConcurrencyCutUVCL
+from powl.discovery.total_order_based.inductive.cuts.concurrency import POWLConcurrencyCutUVCL, POWLConcurrencyCutDFG
 from powl.discovery.total_order_based.inductive.cuts.factory import S, T, CutFactory
-from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL
-from powl.discovery.total_order_based.inductive.cuts.sequence import POWLStrictSequenceCutUVCL
-from powl.discovery.total_order_based.inductive.cuts.xor import POWLExclusiveChoiceCutUVCL
+from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL, POWLLoopCutDFG
+from powl.discovery.total_order_based.inductive.cuts.sequence import POWLStrictSequenceCutUVCL, POWLStrictSequenceCutDFG
+from powl.discovery.total_order_based.inductive.cuts.xor import POWLExclusiveChoiceCutUVCL, POWLExclusiveChoiceCutDFG
 from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import \
-    MaximalPartialOrderCutUVCL
+    MaximalPartialOrderCutUVCL, MaximalPartialOrderCutDFG
 from powl.objects.obj import POWL
 
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from pm4py.objects.dfg import util as dfu
 
 
@@ -20,7 +20,11 @@ class CutFactoryPOWLMaximal(CutFactory):
         if type(obj) is IMDataStructureUVCL:
             return [POWLExclusiveChoiceCutUVCL, POWLStrictSequenceCutUVCL, POWLConcurrencyCutUVCL, POWLLoopCutUVCL,
                     MaximalPartialOrderCutUVCL]
-        return list()
+        elif type(obj) is IMDataStructureDFG:
+            return [POWLExclusiveChoiceCutDFG, POWLStrictSequenceCutDFG, POWLConcurrencyCutDFG, POWLLoopCutDFG,
+                    MaximalPartialOrderCutDFG]
+        else:
+            return []
 
     @classmethod
     def find_cut(cls, obj: IMDataStructureUVCL, parameters: Optional[Dict[str, Any]] = None) -> Optional[
