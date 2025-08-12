@@ -31,13 +31,12 @@ class SingleActivityBaseCaseDFG(BaseCase[IMDataStructureDFG]):
         obj=IMDataStructureDFG,
         parameters: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        return (
-            len(obj.dfg.graph) == 0
-            and len(
-                set(obj.dfg.start_activities).union(obj.dfg.end_activities)
-            )
-            == 1
-        )
+        if len(obj.dfg.graph) == 0:
+            if set(obj.dfg.start_activities) == set(obj.dfg.end_activities):
+                return len(obj.dfg.start_activities) == 1
+            else:
+                raise Exception("Invalid DFG: non-start/end activities are not involved in any edges!")
+        return False
 
     @classmethod
     def leaf(
