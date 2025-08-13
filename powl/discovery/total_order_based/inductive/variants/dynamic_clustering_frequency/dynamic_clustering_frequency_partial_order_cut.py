@@ -13,6 +13,7 @@ from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial
     project_on_groups_with_unique_activities, MaximalPartialOrderCutDFG
 from pm4py.objects.dfg import util as dfu
 
+from powl.objects.utils.relation import get_transitive_closure_from_counter
 
 ORDER_FREQUENCY_RATIO = "order frequency ratio"
 
@@ -135,18 +136,8 @@ def compute_efg_frequencies(interval_log: IMDataStructureUVCL, groups) -> Dict[T
 
 
 def compute_dfg_transitive_closure(dfg: Counter, groups) -> Dict[Tuple[str, str], int]:
-    nodes = set()
-    adj = {}
-    for (a, b), count in dfg.items():
-        if count > 0:
-            nodes.update([a, b])
-            adj.setdefault(a, set()).add(b)
 
-    closure = {u: set(adj.get(u, ())) for u in nodes}
-    for k in nodes:
-        for i in nodes:
-            if k in closure[i]:
-                closure[i] |= closure[k]
+    closure = get_transitive_closure_from_counter(dfg)
 
     activity_to_cluster = {}
     for cluster in groups:
