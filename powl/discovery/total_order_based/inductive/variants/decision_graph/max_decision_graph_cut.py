@@ -75,11 +75,12 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
 
         transitive_predecessors, transitive_successors = dfu.get_transitive_relations(dfg)
 
-        for a in alphabet:
-            if a not in start_activities and len(set(transitive_predecessors[a]) & start_activities) == 0:
-                alphabet = [elm for elm in alphabet if elm != a]
-            if a not in end_activities and len(set(transitive_successors[a]) & end_activities) == 0:
-                alphabet = [elm for elm in alphabet if elm != a]
+        def keep(a):
+            ok_start = (a in start_activities) or (len(set(transitive_predecessors[a]) & start_activities) > 0)
+            ok_end = (a in end_activities) or (len(set(transitive_successors[a]) & end_activities) > 0)
+            return ok_start and ok_end
+
+        alphabet = [a for a in alphabet if keep(a)]
 
         parameters["alphabet"] = alphabet
         parameters["transitive_successors"] = transitive_successors
@@ -153,14 +154,14 @@ class MaximalDecisionGraphCutDFG(MaximalDecisionGraphCut[IMDataStructureDFG], AB
             if group_a == group_b:
                 dfg_map[group_a].graph[(a, b)] = freq
             else:
-                dfg_map[group_a].end_activities[a] =+ freq
-                dfg_map[group_b].start_activities[b] = + freq
+                dfg_map[group_a].end_activities[a] += freq
+                dfg_map[group_b].start_activities[b] += freq
         for a in base_dfg.start_activities:
             group_a = activity_to_group_map[a]
-            dfg_map[group_a].start_activities[a] = + base_dfg.start_activities[a]
+            dfg_map[group_a].start_activities[a] += base_dfg.start_activities[a]
         for a in base_dfg.end_activities:
             group_a = activity_to_group_map[a]
-            dfg_map[group_a].end_activities[a] = + base_dfg.end_activities[a]
+            dfg_map[group_a].end_activities[a] += base_dfg.end_activities[a]
 
         return list(
             map(
