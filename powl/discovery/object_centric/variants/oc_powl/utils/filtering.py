@@ -1,4 +1,7 @@
-def keep_most_frequent_activities(relations, coverage=0.8):
+def keep_most_frequent_activities(relations, coverage=1.0):
+
+    if coverage >= 1.0:
+        return relations
 
     counts = relations.groupby("ocel:activity").apply(lambda frame:frame["ocel:eid"].nunique()).to_dict()
     shares = {key:value / (sum(counts.values())) for key,value in counts.items()}

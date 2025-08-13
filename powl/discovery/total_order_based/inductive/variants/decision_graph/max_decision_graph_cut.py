@@ -139,9 +139,6 @@ class MaximalDecisionGraphCutDFG(MaximalDecisionGraphCut[IMDataStructureDFG], AB
         base_dfg = obj.dfg
         dfg_map = {group: DFG() for group in groups}
 
-        from powl.visualization.dfg.visualizer import apply as view_dfg
-        view_dfg(base_dfg).view()
-
         activity_to_group_map = {}
         for group in groups:
             for activity in group:
