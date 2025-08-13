@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any, Tuple
 
+from powl.discovery.total_order_based.inductive.cuts.concurrency import POWLConcurrencyCutDFG
 from powl.discovery.total_order_based.inductive.cuts.factory import T, CutFactory
 from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL, POWLLoopCutDFG
 from powl.discovery.total_order_based.inductive.cuts.sequence import POWLStrictSequenceCutDFG
@@ -18,7 +19,7 @@ class CutFactoryPOWLDynamicClusteringFrequency(CutFactory):
         if type(obj) is IMDataStructureUVCL:
             return [POWLExclusiveChoiceCutUVCL, POWLLoopCutUVCL, DynamicClusteringFrequencyPartialOrderCutUVCL]
         elif type(obj) is IMDataStructureDFG:
-            return [POWLExclusiveChoiceCutDFG, POWLStrictSequenceCutDFG, POWLLoopCutDFG, DynamicClusteringFrequencyPartialOrderCutDFG]
+            return [POWLExclusiveChoiceCutDFG, POWLStrictSequenceCutDFG, POWLConcurrencyCutDFG, POWLLoopCutUVCL, DynamicClusteringFrequencyPartialOrderCutDFG]
         else:
             return []
 
