@@ -1,19 +1,28 @@
-from copy import copy
+from copy import copy, deepcopy
 
 from powl.objects.BinaryRelation import BinaryRelation
 from pm4py.objects.process_tree.obj import ProcessTree, Operator
 from typing import List as TList, Optional, Union
 
+from abc import ABC, abstractmethod
 
-class POWL(ProcessTree):
+
+class POWL(ProcessTree, ABC):
+    @abstractmethod
     def simplify_using_frequent_transitions(self) -> "POWL":
         return self
 
+    @abstractmethod
     def simplify(self) -> "POWL":
+        return self
+
+    @abstractmethod
+    def reduce_silent_transitions(self) -> "POWL":
         return self
 
 
 class Transition(POWL):
+
     transition_id: int = 0
 
     def __init__(self, label: Optional[str] = None) -> None:
@@ -45,6 +54,15 @@ class Transition(POWL):
         elif isinstance(other, StrictPartialOrder):
             return True
         return NotImplemented
+
+    def simplify_using_frequent_transitions(self) -> "Transition":
+        return self
+
+    def simplify(self) -> "Transition":
+        return self
+
+    def reduce_silent_transitions(self) -> "Transition":
+        return self
 
 
 class SilentTransition(Transition):
@@ -152,6 +170,10 @@ class StrictPartialOrder(POWL):
 
         return res
 
+    def reduce_silent_transitions(self) -> "StrictPartialOrder":
+        new_nodes_map = {node: node.reduce_silent_transitions() for node in self.children if not isinstance(node, SilentTransition)}
+        return self.map_nodes(new_nodes_map)
+
     def simplify(self) -> "StrictPartialOrder":
         simplified_nodes = {}
         sub_nodes = {}
@@ -204,6 +226,13 @@ class StrictPartialOrder(POWL):
                         res.partial_order.add_edge(node_1, node_2)
         return res
 
+    def map_nodes(self, mapping):
+        res = StrictPartialOrder(list(mapping.values()))
+        for node_1, new_node_1 in mapping.items():
+            for node_2, new_node_2 in mapping.items():
+                if self.partial_order.is_edge(node_1, node_2):
+                    res.partial_order.add_edge(new_node_1, new_node_2)
+        return res
 
 class Sequence(StrictPartialOrder):
 
@@ -212,6 +241,7 @@ class Sequence(StrictPartialOrder):
         for i in range(len(nodes)):
             for j in range(i + 1, len(nodes)):
                 self.partial_order.add_edge(nodes[i], nodes[j])
+
 
     def simplify_using_frequent_transitions(self) -> "StrictPartialOrder":
         new_children = []
@@ -223,6 +253,10 @@ class Sequence(StrictPartialOrder):
                 new_children = new_children + [s_node]
         res = Sequence(new_children)
         return res
+
+    def reduce_silent_transitions(self) -> "Sequence":
+        new_nodes = [node.reduce_silent_transitions() for node in self.children if not isinstance(node, SilentTransition)]
+        return Sequence(new_nodes)
 
 
 class OperatorPOWL(POWL):
@@ -257,6 +291,20 @@ class OperatorPOWL(POWL):
             if not node_1.equal_content(node_2):
                 return False
         return True
+
+    def reduce_silent_transitions(self) -> POWL:
+
+        new_children = [node.reduce_silent_transitions() for node in self.children]
+
+        if self.operator == Operator.XOR:
+            new_children_no_silent = [c for c in new_children if not isinstance(c, SilentTransition)]
+            if len(new_children_no_silent) < len(new_children) - 1:
+                new_children = new_children_no_silent + [SilentTransition()]
+                if len(new_children) == 1:
+                    return new_children[0]
+
+        return OperatorPOWL(operator=self.operator, children=new_children)
+
 
     def simplify_using_frequent_transitions(self) -> POWL:
         if self.operator is Operator.XOR and len(self.children) == 2:
@@ -581,6 +629,49 @@ class DecisionGraph(POWL):
             seq = Sequence([current_dg] + end_list)
             return seq
         return None
+
+    def reduce_silent_transitions(self) -> "POWL":
+        graph_copy = deepcopy(self)
+
+        mapping = {node: node.reduce_silent_transitions() for node in graph_copy.children}
+        order_nodes = [n for n in graph_copy.order.nodes]
+
+        for node, new_node in mapping.items():
+            if isinstance(new_node, SilentTransition):
+                order_nodes.remove(node)
+                for n1 in order_nodes:
+                    for n2 in order_nodes:
+                        if graph_copy.order.is_edge(n1, node) and graph_copy.order.is_edge(node, n2):
+                            graph_copy.order.add_edge(n1, n2)
+
+        mapping = {key: value for key, value in mapping.items() if key in order_nodes}
+
+        if len(mapping.keys()) == 0:
+            return SilentTransition()
+        else:
+            new_start = [value for key, value in mapping.items() if graph_copy.order.is_edge(graph_copy.start, key)]
+            new_end = [value for key, value in mapping.items() if graph_copy.order.is_edge(key, graph_copy.end)]
+            skip = graph_copy.order.is_edge(graph_copy.start, graph_copy.end)
+            new_order = BinaryRelation(list(mapping.values()))
+            for node_1 in mapping.keys():
+                for node_2 in mapping.keys():
+                    if graph_copy.order.is_edge(node_1, node_2):
+                        new_order.add_edge(mapping[node_1], mapping[node_2])
+            return DecisionGraph(new_order, new_start, new_end, skip)
+
+
+    def map_nodes(self, mapping):
+        assert all(child in mapping.keys() for child in self.children)
+        new_children = list(mapping.values())
+        new_order = BinaryRelation(new_children)
+        for node_1, new_node_1 in mapping.items():
+            for node_2, new_node_2 in mapping.items():
+                if self.order.is_edge(node_1, node_2):
+                    new_order.add_edge(new_node_1, new_node_2)
+        new_start = [mapping[n] for n in self.start_nodes]
+        new_end = [mapping[n] for n in self.end_nodes]
+        empty_path = self.order.is_edge(self.start, self.end)
+        return DecisionGraph(new_order, new_start, new_end, empty_path)
 
 
 class StartNode:
