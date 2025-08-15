@@ -11,7 +11,7 @@ from pm4py.util import constants
 from pm4py.util import exec_utils
 from pm4py.objects.dfg.obj import DFG
 
-from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL
+from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL, Sequence
 from powl.discovery.total_order_based.inductive.fall_through.empty_traces import POWLEmptyTracesUVCL
 from powl.discovery.total_order_based.inductive.base_case.factory import BaseCaseFactory
 from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory
@@ -139,6 +139,8 @@ class IMBasePOWL(ABC, Generic[T]):
     def _recurse(self, powl: POWL, objs: List[T], parameters: Optional[Dict[str, Any]] = None):
         children = [self.apply(obj, parameters=parameters) for obj in objs]
         if isinstance(powl, StrictPartialOrder):
+            if isinstance(powl, Sequence):
+                return Sequence(children)
             powl_new = StrictPartialOrder(children)
             for i, j in combinations(range(len(powl.children)), 2):
                 if powl.order.is_edge_id(i, j):
