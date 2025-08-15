@@ -14,7 +14,6 @@ from powl.objects.obj import (
     Transition,
 )
 
-
 def __handle_transition(powl_content: Transition) -> nx.DiGraph:
     # Add artificial start and end nodes
     subgraph = nx.DiGraph()
@@ -544,6 +543,10 @@ def apply(powl):
     -------
     bpmn : BPMN
         The converted BPMN model.
+    resulting_graph : nx.DiGraph
+        The resulting directed graph representing the POWL model.
+    original_element_id_to_hash : dict
+        A mapping from original element IDs to their hashes.
     """
     G = nx.DiGraph()
     # Create the start and end event
@@ -557,10 +560,10 @@ def apply(powl):
     resulting_graph = expand_model(powl, G)
     resulting_graph = __postprocess_graph(resulting_graph)
     try:
-        bpmn = __transform_to_bpmn(resulting_graph)
+        bpmn, original_element_id_to_hash = __transform_to_bpmn(resulting_graph)
     except Exception as e:
         raise ValueError(f"Error transforming graph to BPMN: {e}")
-    return bpmn, resulting_graph
+    return bpmn, resulting_graph, original_element_id_to_hash
 
 
 def __transform_to_bpmn(G):
@@ -570,6 +573,7 @@ def __transform_to_bpmn(G):
     # create the root
     node_dict = {node: {"incoming": [], "outgoing": []} for node in G.nodes()}
     node_object_mapping = {}
+    original_element_id_to_hash = {}
     for u, v, _ in G.edges(data=True):
         node_dict[u]["outgoing"].append(v)
         node_dict[v]["incoming"].append(u)
@@ -578,6 +582,7 @@ def __transform_to_bpmn(G):
     for node, attrs in G.nodes(data=True):
         object = None
         hashed_id = str(hash(str(node)))
+        print(f"Node: {node}, ID: {hashed_id}, Attributes: {attrs}")
         if "Start" in str(node):
             hashed_id = f"StartEvent_{hashed_id}"
             object = bpmn.StartEvent(id=hashed_id)
@@ -607,6 +612,7 @@ def __transform_to_bpmn(G):
             # tasks
             hashed_id = f"Task_{hashed_id}"
             object = bpmn.Task(id=hashed_id, name=str(attrs.get("content", "")))
+        original_element_id_to_hash[str(node)] = hashed_id
             
         node_object_mapping[node] = object
         for incoming in node_dict[node]["incoming"]:
@@ -631,4 +637,4 @@ def __transform_to_bpmn(G):
         bpmn.add_node(object)
 
 
-    return bpmn
+    return bpmn, original_element_id_to_hash    

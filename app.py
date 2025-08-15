@@ -91,7 +91,7 @@ def run_app():
 
         st.write("Export Model")
         powl_model = st.session_state["model_gen"]
-        bpmn, _ = bpmn_converter(powl_model)
+        bpmn, _, _ = bpmn_converter(powl_model)
         layouted_bpmn = bpmn_layouter.apply(bpmn)
 
         try:
