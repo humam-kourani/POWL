@@ -1,0 +1,166 @@
+import warnings
+
+from powl.objects.obj import Transition, SilentTransition, OperatorPOWL, Operator, Sequence, StrictPartialOrder, \
+    DecisionGraph
+from powl.objects.oc_powl import ObjectCentricPOWL, LeafNode, ComplexModel
+
+
+def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
+
+
+    if isinstance(oc_powl, LeafNode):
+        if oc_powl.activity == "" or object_type not in oc_powl.related:
+            return SilentTransition()
+        return Transition(label=oc_powl.activity)
+
+    assert isinstance(oc_powl, ComplexModel)
+    related_activities = set([a for a in oc_powl.get_activities()
+        if object_type in oc_powl.get_type_information()[(a,"rel")] and a != ""])
+
+    if not related_activities:
+        return SilentTransition()
+
+    if all(object_type in oc_powl.get_type_information()[(a,"div")] for a in related_activities):
+        return OperatorPOWL(operator=Operator.LOOP,
+            children=[SilentTransition(),OperatorPOWL(operator=Operator.XOR,
+                                                      children= [Transition(label=a) for a in related_activities])])
+
+    else:
+        loop = isinstance(oc_powl.flat_model, OperatorPOWL) and oc_powl.flat_model.operator == Operator.LOOP
+        parallel = isinstance(oc_powl.flat_model, StrictPartialOrder) and len(oc_powl.flat_model.order.edges) == 0
+        if loop:
+            return OperatorPOWL(operator=Operator.LOOP,
+                               children=[project_oc_powl(sub, object_type) for sub in oc_powl.oc_children])
+        if parallel:
+            return StrictPartialOrder([project_oc_powl(sub, object_type) for sub in oc_powl.oc_children])
+
+        diverging = [i for i in range(len(oc_powl.oc_children)) if oc_powl.oc_children[i].get_activities() & related_activities
+            and all(object_type in oc_powl.get_type_information()[(a,"div")]
+                    for a in oc_powl.oc_children[i].get_activities() & related_activities)]
+        non_diverging = [i for i in range(len(oc_powl.oc_children)) if oc_powl.oc_children[i].get_activities()
+            & related_activities and i not in diverging]
+        skipped = [i for i in range(0,len(oc_powl.oc_children)) if i not in diverging and i not in non_diverging]
+
+        if isinstance(oc_powl.flat_model, Sequence):
+            children, index = [],0
+
+            while index < len(oc_powl.oc_children):
+
+                if index in diverging:
+
+                    div_activities = oc_powl.oc_children[index].get_activities() & related_activities
+                    while index+1 in diverging and index+1 < len(oc_powl.oc_children):
+                        index += 1
+                        if index not in skipped:
+                            div_activities |= oc_powl.oc_children[index].get_activities() & related_activities
+
+                    div_activities = {a for a in div_activities if a != ""}
+                    div_subtree = OperatorPOWL(operator=Operator.LOOP,
+                          children=[SilentTransition(),
+                                    OperatorPOWL(
+                                        operator=Operator.XOR,
+                                        children=[Transition(label=a) for a in div_activities])])
+                    children.append(div_subtree)
+
+                else:
+                    children.append(project_oc_powl(oc_powl.oc_children[index],object_type))
+                index += 1
+            return Sequence(children)
+
+        elif isinstance(oc_powl.flat_model, OperatorPOWL) and oc_powl.flat_model.operator == Operator.XOR:
+
+            div_activities = set(sum([list(oc_powl.oc_children[i].get_activities() & related_activities) for i in diverging],[]))
+            div_activities = {a for a in div_activities if a != ""}
+            optional = any([isinstance(sub,LeafNode) and sub.activity == "" and object_type in sub.related for sub in oc_powl.oc_children])
+
+            if div_activities:
+                div_subtree = OperatorPOWL(operator=Operator.LOOP,
+                            children=[SilentTransition(),
+                                      OperatorPOWL(operator=Operator.XOR, children=
+                                      [Transition(label=a) for a in div_activities])])
+
+                return OperatorPOWL(operator=Operator.XOR,children=[div_subtree] +
+                    [project_oc_powl(oc_powl.oc_children[i],object_type) for i in non_diverging] + ([SilentTransition()] if optional else []))
+            else:
+                return OperatorPOWL(operator=Operator.XOR,children=
+                    [project_oc_powl(oc_powl.oc_children[i],object_type) for i in non_diverging] + ([SilentTransition()] if optional else []))
+
+        elif isinstance(oc_powl.flat_model, StrictPartialOrder) or isinstance(oc_powl.flat_model, DecisionGraph):
+            warnings.warn(f"The POWL to OCPN conversion for {oc_powl.flat_model.__class__} has to be fixed!", category=UserWarning)
+            mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type) for i in range(len(oc_powl.oc_children))}
+            return oc_powl.flat_model.map_nodes(mapping)
+        else:
+            raise NotImplementedError
+
+def handle_deficiency(oc_powl: ObjectCentricPOWL):
+
+    if isinstance(oc_powl, LeafNode):
+        if oc_powl.activity == "":
+            return oc_powl,[]
+        else:
+            from itertools import combinations, chain
+            stable_types = oc_powl.related - oc_powl.deficient
+            variable_types = oc_powl.related & oc_powl.deficient
+            if variable_types:
+                ot_sets =  [stable_types | {c for c in comb} for comb in chain.from_iterable(combinations(variable_types,n)
+                                        for n in range(len(variable_types)+1))]
+
+                mapping = {}
+                for ots in ot_sets:
+                    # transition = Transition(oc_powl.activity + "<|>"+str(sorted(list(ots))))
+                    transition = Transition(oc_powl.activity + "<|>" + str(sorted(list(ots))))
+                    mapping[transition] = LeafNode(transition=transition, related=ots, convergent=oc_powl.convergent & ots,
+                            deficient= set(), divergent= oc_powl.divergent & ots)
+                flat_model = OperatorPOWL(operator=Operator.XOR, children=list(mapping.keys()))
+                return ComplexModel(flat_model=flat_model, mapping=mapping), [oc_powl.activity]
+            else:
+                return oc_powl,[]
+
+
+    assert isinstance(oc_powl, ComplexModel)
+    sub_results = [handle_deficiency(sub) for sub in oc_powl.oc_children]
+    flat_children = [child[0].flat_model for child in sub_results]
+    flat_to_oc_mapping = {flat_children[i]: sub_results[i][0] for i in range(len(sub_results))}
+    old_flat_to_new_flat_mapping = {oc_powl.flat_model.children[i]: flat_children[i] for i in range(len(oc_powl.flat_model.children))}
+
+    flat_model = oc_powl.flat_model
+
+    if isinstance(flat_model, Sequence):
+        new_flat_model = Sequence(flat_children)
+    elif isinstance(flat_model, StrictPartialOrder) or isinstance(flat_model, DecisionGraph):
+        new_flat_model = flat_model.map_nodes(old_flat_to_new_flat_mapping)
+    elif isinstance(flat_model, OperatorPOWL):
+        new_flat_model = OperatorPOWL(operator=flat_model.operator, children=flat_children)
+    else:
+        raise NotImplementedError
+
+    return ComplexModel(new_flat_model, flat_to_oc_mapping), sum([sub[1] for sub in sub_results], [])
+
+
+def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL):
+
+    assert isinstance(oc_powl, ObjectCentricPOWL)
+    nets = {}
+
+    convergent_activities = {}
+    activities = set()
+    oc_powl, special_activities = handle_deficiency(oc_powl)
+
+    for ot in oc_powl.get_object_types():
+        powl_model = project_oc_powl(oc_powl,ot)
+        powl_model = powl_model.reduce_silent_transitions()
+        powl_model = powl_model.simplify()
+        from powl.conversion.converter import apply as to_pn
+        net, im, fm = to_pn(powl_model)
+        nets[ot] = net,im,fm
+        activities.update({a for a in oc_powl.get_activities() if ot in oc_powl.get_type_information()[(a,"rel")]})
+        convergent_activities[ot] = {a: ot in oc_powl.get_type_information()[(a,"con")] for a in oc_powl.get_activities()}
+
+    ocpn = {"activities": activities,
+            "object_types": nets.keys(),
+            "petri_nets": nets,
+            "double_arcs_on_activity": convergent_activities,
+            "tbr_results" : {}}
+
+    return ocpn
+
