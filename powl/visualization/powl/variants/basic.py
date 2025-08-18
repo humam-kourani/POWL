@@ -8,7 +8,6 @@ from powl.objects.obj import POWL, Transition, SilentTransition, StrictPartialOr
     FrequentTransition, DecisionGraph, StartNode, EndNode
 
 OPERATOR_BOXES = True
-FREQUENCY_TAG_IMAGES = True
 
 min_width = "1.5"  # Set the minimum width in inches
 min_height = "0.5"
@@ -52,7 +51,6 @@ def apply(powl: POWL) -> Digraph:
     viz.attr(splines='true')
     viz.attr(rankdir='TB')
     viz.attr(style="filled")
-    viz.attr(style="filled")
     viz.attr(fillcolor=fillcolor)
 
     color_map = exec_utils.get_param_value(Parameters.COLOR_MAP, {}, {})
@@ -80,18 +78,26 @@ def get_color(node, color_map):
 
 
 def get_id_base(powl):
-    if isinstance(powl, StrictPartialOrder):
+    if isinstance(powl, Transition) or isinstance(powl, StartNode) or isinstance(powl, EndNode):
+        return str(id(powl))
+    if isinstance(powl, OperatorPOWL):
+        for node in powl.children:
+            if not isinstance(node, SilentTransition):
+                return get_id_base(node)
+    elif isinstance(powl, StrictPartialOrder):
         for node in powl.children:
             return get_id_base(node)
     elif isinstance(powl, DecisionGraph):
         for node in powl.children:
             return get_id_base(node)
     else:
-        return str(id(powl))
+        raise Exception(f"Unknown POWL type {type(powl)}!")
 
 
 def get_id(powl):
-    if isinstance(powl, OperatorPOWL):
+    if isinstance(powl, Transition) or isinstance(powl, StartNode) or isinstance(powl, EndNode):
+        return str(id(powl))
+    elif isinstance(powl, OperatorPOWL):
         if OPERATOR_BOXES:
             return "cluster_" + str(id(powl))
         else:
@@ -101,7 +107,7 @@ def get_id(powl):
     elif isinstance(powl, DecisionGraph):
         return "cluster_" + str(id(powl))
     else:
-        return str(id(powl))
+        raise Exception(f"Unknown POWL type {type(powl)}!")
 
 
 def add_operator_edge(vis, current_node_id, child, directory='none', style=""):
@@ -130,7 +136,34 @@ def add_order_edge(block, child_1, child_2, directory='forward', color="black", 
             block.edge(get_id_base(child_1), get_id_base(child_2), dir=directory, color=color, style=style, penwidth=PEN_WIDTH)
 
 
-def repr_powl(powl, viz, color_map, level):
+def mark_block(block, skip_order, loop_order):
+    if skip_order:
+        if loop_order:
+            with importlib.resources.path("pm4py.visualization.powl.variants.icons", "skip-loop-tag.svg") as gimg:
+                image = str(gimg)
+                block.attr(label=f'''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+                                        <TR><TD WIDTH="55" HEIGHT="27" FIXEDSIZE="TRUE"><IMG SRC="{image}" SCALE="BOTH"/></TD></TR>
+                                        </TABLE>>''')
+                block.attr(labeljust='r')
+        else:
+            with importlib.resources.path("pm4py.visualization.powl.variants.icons", "skip-tag.svg") as gimg:
+                image = str(gimg)
+                block.attr(label=f'''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+                                        <TR><TD WIDTH="55" HEIGHT="27" FIXEDSIZE="TRUE"><IMG SRC="{image}" SCALE="BOTH"/></TD></TR>
+                                        </TABLE>>''')
+                block.attr(labeljust='r')
+    elif loop_order:
+        with importlib.resources.path("pm4py.visualization.powl.variants.icons", "loop-tag.svg") as gimg:
+            image = str(gimg)
+            block.attr(label=f'''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+                                    <TR><TD WIDTH="55" HEIGHT="27" FIXEDSIZE="TRUE"><IMG SRC="{image}" SCALE="BOTH"/></TD></TR>
+                                    </TABLE>>''')
+            block.attr(labeljust='r')
+    else:
+        block.attr(label="")
+
+
+def repr_powl(powl, viz, color_map, level, skip_order=False, loop_order=False, block_id=None):
     font_size = FONT_SIZE
     this_node_id = str(id(powl))
 
@@ -168,11 +201,15 @@ def repr_powl(powl, viz, color_map, level):
 
     elif isinstance(powl, StrictPartialOrder):
         transitive_reduction = powl.order.get_transitive_reduction()
-        block_id = get_id(powl)
+        if not block_id:
+            block_id = get_id(powl)
         with viz.subgraph(name=block_id) as block:
             block.attr(margin="20,20")
             block.attr(style="filled")
             block.attr(fillcolor=current_color)
+
+            mark_block(block, skip_order, loop_order)
+
             for child in powl.children:
                 repr_powl(child, block, color_map, level=level + 1)
             for child in powl.children:
@@ -198,10 +235,35 @@ def repr_powl(powl, viz, color_map, level):
                         add_order_edge(block, child, child2, color="navy", style="dashed")
 
     elif isinstance(powl, OperatorPOWL):
-        with viz.subgraph(name=get_id(powl)) as block:
+        if not block_id:
+            block_id = get_id(powl)
+        if powl.operator == Operator.XOR:
+            silent_children = [child for child in powl.children if isinstance(child, SilentTransition)]
+            if len(silent_children) > 0:
+                other_children = [child for child in powl.children if not isinstance(child, SilentTransition)]
+                if len(other_children) == 1:
+                    repr_powl(other_children[0], viz, color_map, level=level, skip_order=True, block_id=block_id)
+                    return
+                elif len(other_children) > 1:
+                    skip_order = True
+                    powl = OperatorPOWL(operator=powl.operator, children=other_children)
+                    this_node_id = str(id(powl))
+
+        if powl.operator == Operator.LOOP:
+            do = powl.children[0]
+            redo = powl.children[1]
+            if isinstance(do, SilentTransition) and isinstance(redo, StrictPartialOrder):
+                repr_powl(redo, viz, color_map, level=level, skip_order=True, loop_order=True, block_id=block_id)
+                return
+            if isinstance(redo, SilentTransition) and isinstance(do, StrictPartialOrder):
+                repr_powl(do, viz, color_map, level=level, loop_order=True, block_id=block_id)
+                return
+
+        with viz.subgraph(name=block_id) as block:
             block.attr(margin="20,20")
             block.attr(style="filled")
             block.attr(fillcolor=current_color)
+            mark_block(block, skip_order, loop_order)
             if powl.operator == Operator.LOOP:
                 with importlib.resources.path("powl.visualization.powl.variants.icons", "loop.svg") as gimg:
                     image = str(gimg)
