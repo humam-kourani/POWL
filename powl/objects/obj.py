@@ -22,6 +22,9 @@ class Transition(POWL):
         self._identifier = Transition.transition_id
         Transition.transition_id = Transition.transition_id + 1
 
+    def __repr__(self) -> str:
+        return f"Transition(label={self._label}, id={self._identifier})"
+
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Transition):
             return self._label == other._label and self._identifier == other._identifier
@@ -66,6 +69,9 @@ class FrequentTransition(Transition):
 
         super().__init__(label=label)
 
+    def __repr__(self):
+        return f"FrequentTransition(activity={self.activity}, skippable={self.skippable}, selfloop={self.selfloop}, max_freq={self.max_freq}, min_freq={self.min_freq})"
+
     def set_skippable(self, skip):
         self.skippable = skip
         self.__update_label()
@@ -93,6 +99,9 @@ class StrictPartialOrder(POWL):
         self.operator = None
         self._set_order(nodes)
         self.additional_information = None
+
+    def __repr__(self):
+        return f"StrictPartialOrder(nodes={self.order.nodes})"
 
     def _set_order(self, nodes: TList[POWL]) -> None:
         self.order = BinaryRelation(nodes)
@@ -231,6 +240,9 @@ class OperatorPOWL(POWL):
         self.operator = operator
         self.children = children
 
+    def __repr__(self):
+        return f"operator={self.operator}(children={self.children})"
+
     def __lt__(self, other: object) -> bool:
         if isinstance(other, OperatorPOWL):
             return self.__repr__() < other.__repr__()
@@ -360,6 +372,9 @@ class DecisionGraph(POWL):
             order.add_edge(self.start, self.end)
 
         self.order = order
+    
+    def __repr__(self):
+        return f"DecisionGraph(start={self.start}, children={self.children}, end={self.end})"
 
     def simplify(self) -> POWL:
         if len(self.children) == 1:
