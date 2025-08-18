@@ -1,32 +1,52 @@
+import warnings
 import pandas as pd
 import pm4py
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
-from powl.algo.discovery.inductive.utils.filtering import FILTERING_THRESHOLD
-from powl.algo.discovery.inductive.variants.dynamic_clustering_frequency.dynamic_clustering_frequency_partial_order_cut import \
+from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING_THRESHOLD
+from powl.discovery.total_order_based.inductive.variants.dynamic_clustering_frequency.dynamic_clustering_frequency_partial_order_cut import \
     ORDER_FREQUENCY_RATIO
-from powl.algo.discovery.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
+from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
 from powl.objects.obj import POWL
-from pm4py.util.pandas_utils import check_is_pandas_dataframe, check_pandas_dataframe_columns
+from pm4py.objects.ocel.obj import OCEL
 from pm4py.utils import get_properties
 from powl.conversion.converter import apply as powl_converter
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
-from pm4py.objects.bpmn.layout import layouter
-from powl.conversion.variants.to_bpmn import apply as bpmn_converter
+from powl.discovery.object_centric.algorithm import apply as oc_discovery
 
 
+def import_ocel(path: str) -> OCEL:
+    try:
+        ocel = pm4py.read_ocel2(path)
+    except Exception as e:
+        ocel = pm4py.read_ocel(path)
+    return ocel
 
-def import_event_log(path: str) -> pd.DataFrame:
+
+def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
     import rustxes
     if path.endswith(".xes") or path.endswith(".xes.gz"):
         [xes, log_attrs] = rustxes.import_xes(path)
         df = xes.to_pandas()
     elif path.endswith(".csv"):
-        df = pd.read_csv(path, keep_default_na=False, parse_dates=['time:timestamp'])
-        df = pm4py.format_dataframe(df)
-    else:
-        raise Exception("Unsupported file type!")
-    return df
+        cols_to_parse = []
+        df_sample = pd.read_csv(path, nrows=0)
 
+        if timestamp_key:
+            if timestamp_key not in df_sample.columns:
+                raise ValueError("Timestamp key not found in table!")
+        elif 'time:timestamp' in df_sample.columns:
+            timestamp_key =  'time:timestamp'
+            warnings.warn(f"No column given as a timestamp key! Default value 'time:timestamp' is used.")
+        else:
+            warnings.warn("No column given as a timestamp key! Timestamp column parsing is skipped!")
+
+        if timestamp_key:
+            cols_to_parse = [timestamp_key]
+
+        df = pd.read_csv(path, keep_default_na=False, parse_dates=cols_to_parse)
+    else:
+        raise ValueError("Unsupported file type!")
+    return df
 
 
 def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
@@ -41,7 +61,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     Discovers a POWL model from an event log.
 
     Reference paper:
-    Kourani, Humam, and Sebastiaan J. van Zelst. "POWL: partially ordered workflow language." International Conference on Business Process Management. Cham: Springer Nature Switzerland, 2023.
+    H Kourani, G Park, WMP van der Aalst. "Unlocking Non-Block-Structured Decisions: Inductive Mining with Choice Graphs" arXiv preprint arXiv:2505.07052.
 
     :param keep_only_completion_events:
     :param lifecycle_key:
@@ -55,10 +75,8 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     :param case_id_key: attribute to be used as case identifier
     :rtype: ``POWL``
     """
-    if check_is_pandas_dataframe(log):
-        check_pandas_dataframe_columns(
-            log, activity_key=activity_key, timestamp_key=timestamp_key, case_id_key=case_id_key)
 
+    log = log.sort_values([case_id_key, timestamp_key])
     properties = get_properties(log, activity_key=activity_key, timestamp_key=timestamp_key)
 
     if keep_only_completion_events and lifecycle_key in log.columns:
@@ -66,7 +84,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
         if len(filtered_log) > 0:
             log = filtered_log
 
-    from powl.algo.discovery.inductive.utils.filtering import FILTERING_TYPE, FilteringType
+    from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING_TYPE, FilteringType
 
     num_filters = 0
     if order_graph_filtering_threshold is not None:
@@ -87,8 +105,47 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     if num_filters > 1:
         raise Exception("The algorithm can only be used with one filtering threshold at a time!")
 
-    from powl.algo.discovery import algorithm as powl_discovery
+    from powl.discovery.total_order_based import algorithm as powl_discovery
     return powl_discovery.apply(log, variant=variant, parameters=properties)
+
+
+def discover_petri_net_from_ocel(ocel: OCEL, parameters):
+    return oc_discovery(ocel, parameters=parameters)
+
+
+def discover_from_partially_ordered_log(log: pd.DataFrame,
+      activity_key: str = "concept:name",
+      order_key: str = "time:timestamp",
+      case_id_key: str = "case:concept:name",
+      lifecycle_key: str|None = "lifecycle:transition"
+      ) -> POWL:
+    """
+    Discovers a POWL model from a partially ordered event log.
+
+    Reference paper:
+    H Kourani, G Park, WMP van der Aalst. "Revealing Inherent Concurrency in Event Data: A Partial Order Approach to Process Discovery"
+
+    :param log: event log / Pandas dataframe
+    :param activity_key: attribute to be used for the activity
+    :param order_key: attribute to be used for ordering events within traces
+    :param case_id_key: attribute to be used as case identifier
+    :param lifecycle_key: attribute to be used as lifecycle identifier
+    :rtype: ``POWL``
+    """
+    complete_tags = {"complete", "COMPLETE", "Complete"}
+    start_tags = {"start", "START", "Start"}
+
+    from powl.discovery.partial_order_based.utils import log_to_partial_orders
+    partial_orders = log_to_partial_orders.apply(log,
+                                                 case_id_col=case_id_key,
+                                                 activity_col=activity_key,
+                                                 ordering_col=order_key,
+                                                 lifecycle_col=lifecycle_key,
+                                                 start_transitions=start_tags,
+                                                 complete_transitions=complete_tags)
+    from powl.discovery.partial_order_based.variants.base import miner
+    powl = miner.apply(partial_orders)
+    return powl
 
 
 def view(powl: POWL, use_frequency_tags=True):

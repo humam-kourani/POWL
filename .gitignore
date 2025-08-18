@@ -129,16 +129,12 @@ dmypy.json
 # the following files are ignored
 *.txt
 */*.txt
-powl_to_bpmn.pickel
-
 # MacOS
 .DS_Store
-
-# Pickle files
+# pickles
+*.pkl
+*.pickel
+*.pickle
 *.gpickle
-
-# Jupyter Notebook
+# Books for testing
 *.ipynb
-
-# Environment files
-*.yaml
