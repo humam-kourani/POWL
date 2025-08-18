@@ -212,7 +212,10 @@ class StrictPartialOrder(POWL):
                     if simplified_po.partial_order.is_edge(node_1, node_2):
                         res.partial_order.add_edge(node_1, node_2)
         return res
-
+    
+    
+    def add_edge(self, source, target):
+            return self.order.add_edge(source, target)
 
 class Sequence(StrictPartialOrder):
 
