@@ -11,6 +11,9 @@ class POWL(ProcessTree):
 
     def simplify(self) -> "POWL":
         return self
+    
+    def __str__(self):
+        return self.__repr__()
 
 
 class Transition(POWL):
@@ -24,6 +27,7 @@ class Transition(POWL):
 
     def __repr__(self) -> str:
         return f"Transition(label={self._label}, id={self._identifier})"
+    
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Transition):
@@ -70,7 +74,7 @@ class FrequentTransition(Transition):
         super().__init__(label=label)
 
     def __repr__(self):
-        return f"FrequentTransition(activity={self.activity}, skippable={self.skippable}, selfloop={self.selfloop}, max_freq={self.max_freq}, min_freq={self.min_freq})"
+        return f"FrequentTransition(activity={self.activity}, min_freq={self.min_freq}, max_freq={self.max_freq})"
 
     def set_skippable(self, skip):
         self.skippable = skip
@@ -101,7 +105,7 @@ class StrictPartialOrder(POWL):
         self.additional_information = None
 
     def __repr__(self):
-        return f"StrictPartialOrder(nodes={self.order.nodes})"
+        return f"StrictPartialOrder({self.order.nodes})"
 
     def _set_order(self, nodes: TList[POWL]) -> None:
         self.order = BinaryRelation(nodes)
@@ -244,7 +248,7 @@ class OperatorPOWL(POWL):
         self.children = children
 
     def __repr__(self):
-        return f"operator={self.operator}(children={self.children})"
+        return f"{self.operator}({self.children})"
 
     def __lt__(self, other: object) -> bool:
         if isinstance(other, OperatorPOWL):
@@ -377,7 +381,7 @@ class DecisionGraph(POWL):
         self.order = order
     
     def __repr__(self):
-        return f"DecisionGraph(start={self.start}, children={self.children}, end={self.end})"
+        return f"DecisionGraph({self.children})"
 
     def simplify(self) -> POWL:
         if len(self.children) == 1:

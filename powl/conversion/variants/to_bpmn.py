@@ -432,12 +432,6 @@ def expand_model(powl, G: nx.DiGraph):
         The directed graph to populate.
     """
     # Identify the node that has the powl we are currently considering
-    print("-----")
-    print(f"Now, I am handling {powl}")
-    if hasattr(powl, "children"):
-        print(f"It has the following {len(powl.children)}children: {powl.children}")
-    if hasattr(powl, "order"):
-        print(f"It has the following order for {len(powl.order.nodes)} elements: {powl.order.nodes}")
     if isinstance(powl, StartNode) or isinstance(powl, EndNode):
         # Remove them from the graph
         node = next((n for n in G.nodes if G.nodes[n].get("content") is powl), None)
@@ -458,12 +452,6 @@ def expand_model(powl, G: nx.DiGraph):
         if submodel.nodes[node].get("content") is not None
         and submodel.nodes[node]["visited"] is False
     ]
-    print(f"The nodes to handle are: {nodes_to_handle}")
-    print(f"The graph has {len(submodel.nodes)} nodes and {len(submodel.edges)} edges.")
-    for node in submodel.nodes:
-        print(f"- Node {node} has content: {submodel.nodes[node].get('content', 'No content')}")
-        print(f"  Node {node} has visited: {submodel.nodes[node].get('visited', 'No visited flag')}")
-    print("-----")
     for node in nodes_to_handle:
         content = submodel.nodes[node]["content"]
         G = expand_model(content, G)
@@ -543,12 +531,8 @@ def __postprocess_graph(G: nx.DiGraph) -> nx.DiGraph:
         G = G_copy.copy()
     return G_copy
 
-def __inspect_powl(powl):
-    print(f"Inspecting POWL model: {powl}")
-    if hasattr(powl, "children"):
-        print(f"It has the following children: {powl.children}")
-    for child in powl.children:
-        __inspect_powl(child)
+def __print_powl(powl):
+    print(powl)
 
 def apply(powl):
     """
@@ -568,6 +552,7 @@ def apply(powl):
     original_element_id_to_id : dict
         A mapping from original element IDs to their ides.
     """
+    __print_powl(powl)
     G = nx.DiGraph()
     # Create the start and end event
     start_event = "StartEvent"
