@@ -1,20 +1,19 @@
 import os
 import shutil
-import subprocess
-from enum import Enum
-
-import streamlit as st
 import tempfile
+from enum import Enum
 
 import powl
 
-from pm4py import convert_to_bpmn
-from pm4py.util import constants
-from pm4py.objects.petri_net.exporter.variants.pnml import export_petri_as_string
-from pm4py.visualization.petri_net import visualizer as pn_visualizer
-from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
-from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
+import streamlit as st
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
+from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
+from pm4py.objects.petri_net.exporter.variants.pnml import export_petri_as_string
+
+from pm4py.util import constants
+from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
+from pm4py.visualization.petri_net import visualizer as pn_visualizer
+from powl.conversion.variants.to_bpmn import apply as bpmn_converter
 
 
 class ViewType(Enum):
@@ -24,11 +23,9 @@ class ViewType(Enum):
 
 
 def run_app():
-    st.title('🔍 POWL Miner')
+    st.title("🔍 POWL Miner")
 
-    st.subheader(
-        "Process Mining with the Partially Ordered Workflow Language"
-    )
+    st.subheader("Process Mining with the Partially Ordered Workflow Language")
 
     temp_dir = "temp"
 
@@ -48,20 +45,22 @@ def run_app():
         else:
             st.error(body="Couldn't find 'dot' — is Graphviz installed?", icon="⚠️")
 
-    with st.form(key='model_gen_form'):
+    with st.form(key="model_gen_form"):
 
-        uploaded_log = st.file_uploader("For **process model discovery**, upload an event log:",
-                                        type=["csv", "xes", "gz"],
-                                        help="Supported file types: csv, xes, xes.gz")
+        uploaded_log = st.file_uploader(
+            "For **process model discovery**, upload an event log:",
+            type=["csv", "xes", "gz"],
+            help="Supported file types: csv, xes, xes.gz",
+        )
         threshold = st.number_input(
             label="Noise Filtering Threshold (0.0 = No Filtering)",
             min_value=0.0,
             max_value=1.0,
             value=0.0,
             step=0.01,
-            help="Set the threshold for DFG frequency filtering"
+            help="Set the threshold for DFG frequency filtering",
         )
-        submit_button = st.form_submit_button(label='Run')
+        submit_button = st.form_submit_button(label="Run")
         if submit_button:
             if uploaded_log is None:
                 st.error(body="No file is selected!", icon="⚠️")
@@ -69,42 +68,45 @@ def run_app():
             try:
                 contents = uploaded_log.read()
                 os.makedirs(temp_dir, exist_ok=True)
-                with tempfile.NamedTemporaryFile(mode="wb", delete=False,
-                                                 dir=temp_dir, suffix=uploaded_log.name) as temp_file:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb", delete=False, dir=temp_dir, suffix=uploaded_log.name
+                ) as temp_file:
                     temp_file.write(contents)
                 log = powl.import_event_log(temp_file.name)
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
-                process_model = powl.discover(log, dfg_frequency_filtering_threshold=threshold)
+                process_model = powl.discover(
+                    log, dfg_frequency_filtering_threshold=threshold
+                )
 
-                st.session_state['model_gen'] = process_model
+                st.session_state["model_gen"] = process_model
             except Exception as e:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 st.error(body=f"Error during discovery: {e}", icon="⚠️")
                 return
 
-
-    if 'model_gen' in st.session_state and st.session_state['model_gen']:
+    if "model_gen" in st.session_state and st.session_state["model_gen"]:
 
         st.success("Model generated successfully!", icon="🎉")
 
+        st.write("Export Model")
+        powl_model = st.session_state["model_gen"]
+        bpmn, _, _ = bpmn_converter(powl_model)
+        layouted_bpmn = bpmn_layouter.apply(bpmn)
 
         try:
-            st.write("Export Model")
-            powl_model = st.session_state['model_gen']
             pn, im, fm = powl.convert_to_petri_net(powl_model)
-            bpmn = convert_to_bpmn(pn, im, fm)
-            bpmn = bpmn_layouter.apply(bpmn)
 
             download_1, download_2 = st.columns(2)
             with download_1:
-                bpmn_data = get_xml_string(bpmn,
-                                           parameters={"encoding": constants.DEFAULT_ENCODING})
+                bpmn_data =  get_xml_string(layouted_bpmn,
+                                parameters={"encoding": constants.DEFAULT_ENCODING})
+
                 st.download_button(
                     label="Download BPMN",
                     data=bpmn_data,
                     file_name="process_model.bpmn",
-                    mime="application/xml"
+                    mime="application/xml",
                 )
 
             with download_2:
@@ -113,38 +115,41 @@ def run_app():
                     label="Download PNML",
                     data=pn_data,
                     file_name="process_model.pnml",
-                    mime="application/xml"
+                    mime="application/xml",
                 )
 
-            view_option = st.selectbox("Select a view:", [v_type.value for v_type in ViewType])
+            view_option = st.selectbox(
+                "Select a view:", [v_type.value for v_type in ViewType]
+            )
 
             image_format = str("svg").lower()
             if view_option == ViewType.POWL.value:
                 from powl.visualization.powl import visualizer
+
                 vis_str = visualizer.apply(powl_model)
 
             elif view_option == ViewType.PETRI.value:
-                visualization = pn_visualizer.apply(pn, im, fm,
-                                                    parameters={'format': image_format})
-                vis_str = visualization.pipe(format='svg').decode('utf-8')
+                visualization = pn_visualizer.apply(
+                    pn, im, fm, parameters={"format": image_format}
+                )
+                vis_str = visualization.pipe(format="svg").decode("utf-8")
             else:  # BPMN
-                from pm4py.objects.bpmn.layout import layouter
-                layouted_bpmn = layouter.apply(bpmn)
-                visualization = bpmn_visualizer.apply(layouted_bpmn,
-                                                      parameters={'format': image_format})
-                vis_str = visualization.pipe(format='svg').decode('utf-8')
+                visualization = bpmn_visualizer.apply(
+                    layouted_bpmn, parameters={"format": image_format}
+                )
+                vis_str = visualization.pipe(format="svg").decode("utf-8")
 
             with st.expander("View Image", expanded=True):
                 st.image(vis_str)
 
         except Exception as e:
-            st.error(icon='⚠️', body=str(e))
+            st.error(icon="⚠️", body=str(e))
 
 
 def footer():
     style = """
         <style>
-          .footer-container { 
+          .footer-container {
               position: fixed;
               left: 0;
               bottom: 0;
@@ -178,7 +183,7 @@ def footer():
     foot = f"""
         <div class='footer-container'>
             <div class='footer-text'>
-                Developed by 
+                Developed by
                 <a href="https://www.linkedin.com/in/humam-kourani-98b342232/" target="_blank" style="text-decoration:none;">Humam Kourani</a>
                 at the
                 <a href="https://www.fit.fraunhofer.de/" target="_blank" style="text-decoration:none;">Fraunhofer Institute for Applied Information Technology FIT</a>.
@@ -199,9 +204,6 @@ def footer():
 
 
 if __name__ == "__main__":
-    st.set_page_config(
-        page_title="POWL Miner",
-        page_icon="🔍"
-    )
+    st.set_page_config(page_title="POWL Miner", page_icon="🔍")
     footer()
     run_app()

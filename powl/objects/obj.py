@@ -11,6 +11,9 @@ class POWL(ProcessTree):
 
     def simplify(self) -> "POWL":
         return self
+    
+    def __str__(self):
+        return self.__repr__()
 
 
 class Transition(POWL):
@@ -21,6 +24,10 @@ class Transition(POWL):
         self._label = label
         self._identifier = Transition.transition_id
         Transition.transition_id = Transition.transition_id + 1
+
+    def __repr__(self) -> str:
+        return f"Transition(label={self._label}, id={self._identifier})"
+    
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Transition):
@@ -66,6 +73,9 @@ class FrequentTransition(Transition):
 
         super().__init__(label=label)
 
+    def __repr__(self):
+        return f"FrequentTransition(activity={self.activity}, min_freq={self.min_freq}, max_freq={self.max_freq})"
+
     def set_skippable(self, skip):
         self.skippable = skip
         self.__update_label()
@@ -93,6 +103,9 @@ class StrictPartialOrder(POWL):
         self.operator = None
         self._set_order(nodes)
         self.additional_information = None
+
+    def __repr__(self):
+        return f"StrictPartialOrder({self.order.nodes})"
 
     def _set_order(self, nodes: TList[POWL]) -> None:
         self.order = BinaryRelation(nodes)
@@ -203,7 +216,10 @@ class StrictPartialOrder(POWL):
                     if simplified_po.partial_order.is_edge(node_1, node_2):
                         res.partial_order.add_edge(node_1, node_2)
         return res
-
+    
+    
+    def add_edge(self, source, target):
+            return self.order.add_edge(source, target)
 
 class Sequence(StrictPartialOrder):
 
@@ -230,6 +246,9 @@ class OperatorPOWL(POWL):
         super().__init__()
         self.operator = operator
         self.children = children
+
+    def __repr__(self):
+        return f"{self.operator}({self.children})"
 
     def __lt__(self, other: object) -> bool:
         if isinstance(other, OperatorPOWL):
@@ -360,6 +379,9 @@ class DecisionGraph(POWL):
             order.add_edge(self.start, self.end)
 
         self.order = order
+    
+    def __repr__(self):
+        return f"DecisionGraph({self.children})"
 
     def simplify(self) -> POWL:
         if len(self.children) == 1:
