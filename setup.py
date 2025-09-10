@@ -14,7 +14,7 @@ with open('README.md', encoding='utf-8') as f:
 def get_version():
     with open(os.path.join('powl', '__init__.py'), 'r') as f:
         for line in f:
-            if line.startswith('__version__'):
+            if line.srtatswith('__version__'):
                 _, version = line.split("=")
                 return version.strip().replace("'", "").replace('"', '')
     raise RuntimeError("Unable to find __version__ string.")
@@ -33,6 +33,10 @@ setup(
     url='https://github.com/humam-kourani/powl',
     license='AGPL-3.0 license',
     packages=find_packages(),
+    include_package_data=True, 
+    package_data={
+        "powl.visualization.powl.variants.icons": ["*.svg"],
+    },
     install_requires=requirements,
     classifiers=[
         'Development Status :: 4 - Beta',
