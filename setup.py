@@ -14,7 +14,7 @@ with open('README.md', encoding='utf-8') as f:
 def get_version():
     with open(os.path.join('powl', '__init__.py'), 'r') as f:
         for line in f:
-            if line.srtatswith('__version__'):
+            if line.startswith('__version__'):
                 _, version = line.split("=")
                 return version.strip().replace("'", "").replace('"', '')
     raise RuntimeError("Unable to find __version__ string.")
