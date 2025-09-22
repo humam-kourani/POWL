@@ -1,8 +1,10 @@
-import warnings
+import copy
 
+from powl.conversion.utils.pn_reduction import add_arc_from_to
 from powl.objects.obj import Transition, SilentTransition, OperatorPOWL, Operator, Sequence, StrictPartialOrder, \
     DecisionGraph
 from powl.objects.oc_powl import ObjectCentricPOWL, LeafNode, ComplexModel
+from pm4py.objects.petri_net.obj import PetriNet, Marking
 
 
 def generate_flower_model(activity_labels):
@@ -10,6 +12,44 @@ def generate_flower_model(activity_labels):
                         children=[SilentTransition(),
                             OperatorPOWL(operator=Operator.XOR, children=
                             [Transition(label=a) for a in activity_labels])])
+
+
+def clone_workflow_net(
+    net: PetriNet,
+    im: Marking,
+    fm: Marking,
+    name_suffix: str = "_copy",
+    label_delimiter: str = "<|>"
+):
+    """
+    Create a deep copy of a Petri net and its initial/final markings.
+    - Appends `name_suffix` to place/transition names.
+    - If a transition label contains `label_delimiter`, keeps only the part before it.
+    """
+    mapping = {}
+
+    new_net = PetriNet(f"{net.name}{name_suffix}")
+
+    for place in net.places:
+        new_place = PetriNet.Place(f"{place.name}{name_suffix}")
+        new_net.places.add(new_place)
+        mapping[place] = new_place
+
+    for t in net.transitions:
+        label = t.label
+        if label and label_delimiter in label:
+            label = label.split(label_delimiter, 1)[0].strip()
+        new_t = PetriNet.Transition(name=f"{t.name}{name_suffix}", label=label)
+        new_net.transitions.add(new_t)
+        mapping[t] = new_t
+
+    for arc in net.arcs:
+        add_arc_from_to(mapping[arc.source], mapping[arc.target], new_net)
+
+    new_im = Marking({mapping[p]: im[p] for p in im})
+    new_fm = Marking({mapping[p]: fm[p] for p in fm})
+
+    return new_net, new_im, new_fm
 
 
 def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
@@ -148,6 +188,7 @@ def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL):
 
     assert isinstance(oc_powl, ObjectCentricPOWL)
     nets = {}
+    nets_duplicates = {}
 
     convergent_activities = {}
     activities = set()
@@ -160,12 +201,15 @@ def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL):
         from powl.conversion.converter import apply as to_pn
         net, im, fm = to_pn(powl_model)
         nets[ot] = net,im,fm
+        nets_duplicates[ot] = clone_workflow_net(net, im, fm, label_delimiter="<|>")
         activities.update({a for a in oc_powl.get_activities() if ot in oc_powl.get_type_information()[(a,"rel")]})
         convergent_activities[ot] = {a: ot in oc_powl.get_type_information()[(a,"con")] for a in oc_powl.get_activities()}
+
 
     ocpn = {"activities": activities,
             "object_types": nets.keys(),
             "petri_nets": nets,
+            "petri_nets_with_duplicates": nets_duplicates,
             "double_arcs_on_activity": convergent_activities,
             "tbr_results" : {}}
 
