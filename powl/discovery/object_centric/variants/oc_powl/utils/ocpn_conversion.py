@@ -5,6 +5,13 @@ from powl.objects.obj import Transition, SilentTransition, OperatorPOWL, Operato
 from powl.objects.oc_powl import ObjectCentricPOWL, LeafNode, ComplexModel
 
 
+def generate_flower_model(activity_labels):
+    return OperatorPOWL(operator=Operator.LOOP,
+                        children=[SilentTransition(),
+                            OperatorPOWL(operator=Operator.XOR, children=
+                            [Transition(label=a) for a in activity_labels])])
+
+
 def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
 
 
@@ -55,11 +62,7 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
                             div_activities |= oc_powl.oc_children[index].get_activities() & related_activities
 
                     div_activities = {a for a in div_activities if a != ""}
-                    div_subtree = OperatorPOWL(operator=Operator.LOOP,
-                          children=[SilentTransition(),
-                                    OperatorPOWL(
-                                        operator=Operator.XOR,
-                                        children=[Transition(label=a) for a in div_activities])])
+                    div_subtree = generate_flower_model(activity_labels=div_activities)
                     children.append(div_subtree)
 
                 else:
@@ -74,10 +77,7 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
             optional = any([isinstance(sub,LeafNode) and sub.activity == "" and object_type in sub.related for sub in oc_powl.oc_children])
 
             if div_activities:
-                div_subtree = OperatorPOWL(operator=Operator.LOOP,
-                            children=[SilentTransition(),
-                                      OperatorPOWL(operator=Operator.XOR, children=
-                                      [Transition(label=a) for a in div_activities])])
+                div_subtree = generate_flower_model(activity_labels=div_activities)
 
                 return OperatorPOWL(operator=Operator.XOR,children=[div_subtree] +
                     [project_oc_powl(oc_powl.oc_children[i],object_type) for i in non_diverging] + ([SilentTransition()] if optional else []))
@@ -86,9 +86,17 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
                     [project_oc_powl(oc_powl.oc_children[i],object_type) for i in non_diverging] + ([SilentTransition()] if optional else []))
 
         elif isinstance(oc_powl.flat_model, StrictPartialOrder) or isinstance(oc_powl.flat_model, DecisionGraph):
-            warnings.warn(f"The POWL to OCPN conversion for {oc_powl.flat_model.__class__} has to be fixed!", category=UserWarning)
-            mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type) for i in range(len(oc_powl.oc_children))}
-            return oc_powl.flat_model.map_nodes(mapping)
+            div_activities = set(
+                sum([list(oc_powl.oc_children[i].get_activities() & related_activities) for i in diverging], []))
+            div_activities = {a for a in div_activities if a != ""}
+
+            if div_activities:
+                # Note that all related activities are considered, not only divergent ones
+                div_subtree = generate_flower_model(activity_labels=related_activities)
+                return div_subtree
+            else:
+                mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type) for i in range(len(oc_powl.oc_children))}
+                return oc_powl.flat_model.map_nodes(mapping)
         else:
             raise NotImplementedError
 
@@ -107,7 +115,6 @@ def handle_deficiency(oc_powl: ObjectCentricPOWL):
 
                 mapping = {}
                 for ots in ot_sets:
-                    # transition = Transition(oc_powl.activity + "<|>"+str(sorted(list(ots))))
                     transition = Transition(oc_powl.activity + "<|>" + str(sorted(list(ots))))
                     mapping[transition] = LeafNode(transition=transition, related=ots, convergent=oc_powl.convergent & ots,
                             deficient= set(), divergent= oc_powl.divergent & ots)
