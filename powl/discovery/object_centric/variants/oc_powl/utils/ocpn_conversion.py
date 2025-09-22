@@ -132,8 +132,20 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type):
 
             if div_activities:
                 # Note that all related activities are considered, not only divergent ones
-                div_subtree = generate_flower_model(activity_labels=related_activities)
-                return div_subtree
+                div_subtree = generate_flower_model(activity_labels=div_activities)
+                if len(non_diverging) > 0:
+                    mapping = {
+                        oc_powl.flat_model.children[i]: (
+                            project_oc_powl(oc_powl.oc_children[i], object_type)
+                            if i in non_diverging
+                            else SilentTransition()
+                        )
+                        for i in range(len(oc_powl.oc_children))
+                    }
+                    non_div_subtree = oc_powl.flat_model.map_nodes(mapping)
+                    return StrictPartialOrder(nodes=[non_div_subtree, div_subtree])
+                else:
+                    return div_subtree
             else:
                 mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type) for i in range(len(oc_powl.oc_children))}
                 return oc_powl.flat_model.map_nodes(mapping)
