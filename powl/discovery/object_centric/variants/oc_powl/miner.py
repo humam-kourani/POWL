@@ -23,16 +23,10 @@ def apply(
     relations = keep_most_frequent_activities(relations, coverage=activity_coverage_threshold)
 
     div, con, rel, defi = get_interaction_patterns(relations)
-    df2_graph = get_divergence_free_graph(relations, div, rel)
-
-    # from powl.visualization.dfg.visualizer import apply as view_dfg
-    # view_dfg(df2_graph).view()
-    # tree = pm4py.discover_process_tree_inductive(df2_graph)
-    # pm4py.view_process_tree(tree, format='SVG')
-    # powl_model = from_tree.apply(tree)
+    df2_graph, divergent_partitions = get_divergence_free_graph(relations, div, rel)
 
     powl_model = discover_from_dfg(df2_graph, variant=powl_miner_variant)
-    oc_powl = load_oc_powl(powl_model, rel,div, con, defi)
-    ocpn = convert_ocpowl_to_ocpn(oc_powl)
+    oc_powl = load_oc_powl(powl_model, rel, div, con, defi)
+    ocpn = convert_ocpowl_to_ocpn(oc_powl, divergent_partitions)
 
     return ocpn

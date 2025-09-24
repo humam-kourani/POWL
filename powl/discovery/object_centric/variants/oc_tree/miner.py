@@ -20,7 +20,7 @@ def apply(
     relations = keep_most_frequent_activities(relations, coverage=activity_coverage_threshold)
 
     div, con, rel, defi = get_interaction_patterns(relations)
-    df2_graph = get_divergence_free_graph(relations, div, rel)
+    df2_graph, _ = get_divergence_free_graph(relations, div, rel)
 
     tree = pm4py.discover_process_tree_inductive(df2_graph)
     ocpt = load_from_pt(tree,rel,div,con,defi)
