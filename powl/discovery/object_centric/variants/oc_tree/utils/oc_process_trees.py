@@ -1,3 +1,5 @@
+# this file was initially copied from https://github.com/Nik314/DF2-Miner
+
 class LeafNode:
 
 

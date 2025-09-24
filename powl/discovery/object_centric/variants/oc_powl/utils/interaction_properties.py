@@ -1,4 +1,4 @@
-# this file is copied from https://github.com/Nik314/DF2-Miner
+# this file was initially copied from https://github.com/Nik314/DF2-Miner
 
 def get_interaction_patterns(relations):
 

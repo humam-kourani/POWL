@@ -1,3 +1,5 @@
+# this file was initially copied from https://github.com/Nik314/DF2-Miner
+
 def keep_most_frequent_activities(relations, coverage=1.0):
 
     if coverage >= 1.0:

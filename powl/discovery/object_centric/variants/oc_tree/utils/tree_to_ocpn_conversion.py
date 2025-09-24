@@ -1,3 +1,5 @@
+# this file was initially copied from https://github.com/Nik314/DF2-Miner
+
 from pm4py.objects.process_tree.utils import generic as pt_util
 import pm4py
 from pm4py.objects.process_tree.obj import ProcessTree,Operator
