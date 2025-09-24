@@ -72,7 +72,6 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, divergent_partition
     else:
         loop = isinstance(oc_powl.flat_model, OperatorPOWL) and oc_powl.flat_model.operator == Operator.LOOP
         parallel = isinstance(oc_powl.flat_model, StrictPartialOrder) and len(oc_powl.flat_model.order.edges) == 0
-        xor = isinstance(oc_powl.flat_model, OperatorPOWL) and oc_powl.flat_model.operator == Operator.XOR
         if loop:
             return OperatorPOWL(operator=Operator.LOOP,
                                children=[project_oc_powl(sub, object_type, divergent_partitions) for sub in oc_powl.oc_children])
@@ -84,44 +83,6 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, divergent_partition
                     for a in oc_powl.oc_children[i].get_activities() & related_activities)]
         non_diverging = [i for i in range(len(oc_powl.oc_children)) if oc_powl.oc_children[i].get_activities()
             & related_activities and i not in diverging]
-
-        skipped = [i for i in range(0, len(oc_powl.oc_children)) if i not in diverging and i not in non_diverging]
-
-        if isinstance(oc_powl.flat_model, Sequence):
-            children, index = [], 0
-
-            while index < len(oc_powl.oc_children):
-
-                if index in diverging:
-
-                    div_activities = oc_powl.oc_children[index].get_activities() & related_activities
-                    while index + 1 in diverging and index + 1 < len(oc_powl.oc_children):
-                        index += 1
-                        if index not in skipped:
-                            div_activities |= oc_powl.oc_children[index].get_activities() & related_activities
-
-                    div_activities = {a for a in div_activities if a != ""}
-                    div_subtree = generate_flower_model(activity_labels=div_activities)
-                    children.append(div_subtree)
-
-                else:
-                    children.append(project_oc_powl(oc_powl.oc_children[index], object_type))
-                index += 1
-            return Sequence(children)
-
-        elif xor:
-            div_activities = set(sum([list(oc_powl.oc_children[i].get_activities() & related_activities) for i in diverging],[]))
-            div_activities = {a for a in div_activities if a != ""}
-            optional = any([isinstance(sub,LeafNode) and sub.activity == "" and object_type in sub.related for sub in oc_powl.oc_children])
-
-            if div_activities:
-                div_subtree = generate_flower_model(activity_labels=div_activities)
-
-                return OperatorPOWL(operator=Operator.XOR,children=[div_subtree] +
-                    [project_oc_powl(oc_powl.oc_children[i],object_type, divergent_partitions) for i in non_diverging] + ([SilentTransition()] if optional else []))
-            else:
-                return OperatorPOWL(operator=Operator.XOR,children=
-                    [project_oc_powl(oc_powl.oc_children[i],object_type, divergent_partitions) for i in non_diverging] + ([SilentTransition()] if optional else []))
 
         if isinstance(oc_powl.flat_model, StrictPartialOrder):
             div_activities = set(
@@ -146,6 +107,7 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, divergent_partition
             else:
                 mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type, divergent_partitions) for i in range(len(oc_powl.oc_children))}
                 return oc_powl.flat_model.map_nodes(mapping)
+
         elif isinstance(oc_powl.flat_model, DecisionGraph):
 
             mapping_with_ids = {}
