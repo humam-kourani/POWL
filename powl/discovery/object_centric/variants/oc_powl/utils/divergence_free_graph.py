@@ -6,32 +6,32 @@ from powl.objects.utils.relation import get_transitive_closure_from_counter
 from pm4py.objects.dfg.obj import DFG
 
 
-def _partitions_from_edges(nodes, edges):
-    edges = [tuple(edge) for edge in edges]
-    parts = [{a} for a in nodes]
-
-    def find_group(a):
-        for g in parts:
-            if a in g:
-                return g
-        return None
-
-    for u, v in edges:
-        gu = find_group(u)
-        gv = find_group(v)
-        assert gu is not None and gv is not None
-        if gu is gv:
-            continue
-        gu |= gv
-        parts.remove(gv)
-
-    covered = set().union(*parts) if parts else set()
-    nodes_set = set(nodes)
-    assert covered == nodes_set, "Invalid partition: missing/extra nodes!"
-    assert all(len(g) > 0 for g in parts), "Invalid partition: empty group encountered!"
-    assert sum(len(g) for g in parts) == len(covered), "Invalid partition: overlapping groups!"
-
-    return parts
+# def _partitions_from_edges(nodes, edges):
+#     edges = [tuple(edge) for edge in edges]
+#     parts = [{a} for a in nodes]
+#
+#     def find_group(a):
+#         for g in parts:
+#             if a in g:
+#                 return g
+#         return None
+#
+#     for u, v in edges:
+#         gu = find_group(u)
+#         gv = find_group(v)
+#         assert gu is not None and gv is not None
+#         if gu is gv:
+#             continue
+#         gu |= gv
+#         parts.remove(gv)
+#
+#     covered = set().union(*parts) if parts else set()
+#     nodes_set = set(nodes)
+#     assert covered == nodes_set, "Invalid partition: missing/extra nodes!"
+#     assert all(len(g) > 0 for g in parts), "Invalid partition: empty group encountered!"
+#     assert sum(len(g) for g in parts) == len(covered), "Invalid partition: overlapping groups!"
+#
+#     return parts
 
 
 
@@ -46,7 +46,7 @@ def get_divergence_free_graph(relations, div, rel):
     non_starts = []
     non_ends = []
 
-    divergent_partitions_by_ot = {}
+    divergence_matrices = {}
 
 
     for ot in relations["ocel:type"].unique():
@@ -79,8 +79,7 @@ def get_divergence_free_graph(relations, div, rel):
         non_starts += [a for a in alphabet if not local_start.get(a,0) and ot in rel[a]]
         non_ends += [a for a in alphabet if not local_end.get(a,0) and ot in rel[a]]
 
-        divergent_acts_for_ot = {a for a in alphabet if ot in div[a]}
-        divergent_partitions_by_ot[ot] = _partitions_from_edges(divergent_acts_for_ot, filtered_edges)
+        divergence_matrices[ot] = filtered_edges
 
     global_dfg = {key:value for key,value in global_dfg.items() if value}
     global_start = {key:value for key,value in global_start.items() if value and key not in non_starts}
@@ -111,4 +110,4 @@ def get_divergence_free_graph(relations, div, rel):
     for node in new_ends:
         global_end[node] = 1
 
-    return DFG(global_dfg,global_start,global_end), divergent_partitions_by_ot
+    return DFG(global_dfg,global_start,global_end), divergence_matrices

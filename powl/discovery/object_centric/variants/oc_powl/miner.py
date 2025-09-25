@@ -23,10 +23,12 @@ def apply(
     relations = keep_most_frequent_activities(relations, coverage=activity_coverage_threshold)
 
     div, con, rel, defi = get_interaction_patterns(relations)
-    df2_graph, divergent_partitions = get_divergence_free_graph(relations, div, rel)
+    df2_graph, divergence_matrices = get_divergence_free_graph(relations, div, rel)
 
     powl_model = discover_from_dfg(df2_graph, variant=powl_miner_variant)
+    import powl
+    powl.view(powl_model)
     oc_powl = load_oc_powl(powl_model, rel, div, con, defi)
-    ocpn = convert_ocpowl_to_ocpn(oc_powl, divergent_partitions)
+    ocpn = convert_ocpowl_to_ocpn(oc_powl, divergence_matrices)
 
     return ocpn
