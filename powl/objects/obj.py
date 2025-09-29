@@ -17,7 +17,7 @@ class POWL(ProcessTree, ABC):
         return self
 
     @abstractmethod
-    def reduce_silent_transitions(self) -> "POWL":
+    def reduce_silent_transitions(self, add_empty_paths=True) -> "POWL":
         return self
 
 
@@ -61,7 +61,7 @@ class Transition(POWL):
     def simplify(self) -> "Transition":
         return self
 
-    def reduce_silent_transitions(self) -> "Transition":
+    def reduce_silent_transitions(self, add_empty_paths=True) -> "Transition":
         return self
 
 
@@ -170,8 +170,8 @@ class StrictPartialOrder(POWL):
 
         return res
 
-    def reduce_silent_transitions(self) -> "StrictPartialOrder":
-        new_nodes_map = {node: node.reduce_silent_transitions() for node in self.children if not isinstance(node, SilentTransition)}
+    def reduce_silent_transitions(self, add_empty_paths=True) -> "StrictPartialOrder":
+        new_nodes_map = {node: node.reduce_silent_transitions(add_empty_paths) for node in self.children if not isinstance(node, SilentTransition)}
         return self.map_nodes(new_nodes_map)
 
     def simplify(self) -> "StrictPartialOrder":
@@ -254,8 +254,8 @@ class Sequence(StrictPartialOrder):
         res = Sequence(new_children)
         return res
 
-    def reduce_silent_transitions(self) -> "Sequence":
-        new_nodes = [node.reduce_silent_transitions() for node in self.children if not isinstance(node, SilentTransition)]
+    def reduce_silent_transitions(self, add_empty_paths=True) -> "Sequence":
+        new_nodes = [node.reduce_silent_transitions(add_empty_paths) for node in self.children if not isinstance(node, SilentTransition)]
         return Sequence(new_nodes)
 
 
@@ -292,9 +292,9 @@ class OperatorPOWL(POWL):
                 return False
         return True
 
-    def reduce_silent_transitions(self) -> POWL:
+    def reduce_silent_transitions(self, add_empty_paths=True) -> POWL:
 
-        new_children = [node.reduce_silent_transitions() for node in self.children]
+        new_children = [node.reduce_silent_transitions(add_empty_paths) for node in self.children]
 
         if self.operator == Operator.XOR:
             new_children_no_silent = [c for c in new_children if not isinstance(c, SilentTransition)]
@@ -630,10 +630,10 @@ class DecisionGraph(POWL):
             return seq
         return None
 
-    def reduce_silent_transitions(self) -> "POWL":
+    def reduce_silent_transitions(self, add_empty_paths=True) -> "POWL":
         graph_copy = deepcopy(self)
 
-        mapping = {node: node.reduce_silent_transitions() for node in graph_copy.children}
+        mapping = {node: node.reduce_silent_transitions(add_empty_paths) for node in graph_copy.children}
         order_nodes = [n for n in graph_copy.order.nodes]
 
         for node, new_node in mapping.items():
@@ -657,6 +657,11 @@ class DecisionGraph(POWL):
                 for node_2 in mapping.keys():
                     if graph_copy.order.is_edge(node_1, node_2):
                         new_order.add_edge(mapping[node_1], mapping[node_2])
+            if skip and not add_empty_paths:
+                old_skip = self.order.is_edge(self.start, self.end)
+                if not old_skip:
+                    graph_copy.order.remove_edge(graph_copy.start, graph_copy.end)
+                    skip = False
             return DecisionGraph(new_order, new_start, new_end, skip)
 
 

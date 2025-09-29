@@ -245,7 +245,7 @@ def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL, divergence_matrices):
 
     for ot in oc_powl.get_object_types():
         powl_model = project_oc_powl(oc_powl,ot,divergence_matrices[ot])
-        powl_model = powl_model.reduce_silent_transitions()
+        powl_model = powl_model.reduce_silent_transitions(add_empty_paths=False)
         powl_model = powl_model.simplify()
         from powl.conversion.converter import apply as to_pn
         net, im, fm = to_pn(powl_model)
