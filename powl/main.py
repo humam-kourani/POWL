@@ -185,8 +185,6 @@ def convert_to_petri_net(powl: POWL):
 
 
 def convert_to_bpmn(powl: POWL):
-    pn, im, fm = powl_converter(powl)
-    bpmn = pm4py.convert_to_bpmn(pn, im, fm)
-    from pm4py.objects.bpmn.layout import layouter
+    bpmn, _, _ = bpmn_converter(powl)
     bpmn = layouter.apply(bpmn)
     return bpmn

@@ -33,6 +33,10 @@ setup(
     url='https://github.com/humam-kourani/powl',
     license='AGPL-3.0 license',
     packages=find_packages(),
+    include_package_data=True, 
+    package_data={
+        "powl.visualization.powl.variants.icons": ["*.svg"],
+    },
     install_requires=requirements,
     classifiers=[
         'Development Status :: 4 - Beta',
