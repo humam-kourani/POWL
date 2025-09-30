@@ -610,7 +610,7 @@ class DecisionGraph(POWL):
         start_list = []
         current_dg = self
         while len(current_dg.children) > 1 and len(current_dg.start_nodes) == 1 and not current_dg.order.is_edge(
-                current_dg.start, current_dg.end):
+                current_dg.start, current_dg.end) and current_dg.order.get_preset(current_dg.start_nodes[0]) == {current_dg.start}:
             start = current_dg.start_nodes[0]
             start_list.append(start)
             postset = current_dg.order.get_postset(start)
@@ -633,7 +633,7 @@ class DecisionGraph(POWL):
         end_list = []
         current_dg = self
         while len(current_dg.children) > 1 and len(current_dg.end_nodes) == 1 and not current_dg.order.is_edge(
-                current_dg.start, current_dg.end):
+                current_dg.start, current_dg.end) and current_dg.order.get_postset(current_dg.end_nodes[0]) == {current_dg.end}:
             end = current_dg.end_nodes[0]
             end_list = [end] + end_list
             pretset = current_dg.order.get_preset(end)
