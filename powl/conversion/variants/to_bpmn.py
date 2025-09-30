@@ -552,7 +552,6 @@ def apply(powl):
     original_element_id_to_id : dict
         A mapping from original element IDs to their ides.
     """
-    __print_powl(powl)
     G = nx.DiGraph()
     # Create the start and end event
     start_event = "StartEvent"

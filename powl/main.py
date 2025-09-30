@@ -10,10 +10,12 @@ from powl.objects.obj import POWL
 from pm4py.objects.ocel.obj import OCEL
 from pm4py.utils import get_properties
 from powl.conversion.converter import apply as powl_converter
+from powl.conversion.variants.to_bpmn import apply as to_bpmn
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
 from powl.discovery.object_centric.algorithm import apply as oc_discovery
 from powl.discovery.dfg_based.algorithm import apply as dfg_discovery
 from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
 
 
 def import_ocel(path: str) -> OCEL:
@@ -185,6 +187,6 @@ def convert_to_petri_net(powl: POWL):
 
 
 def convert_to_bpmn(powl: POWL):
-    bpmn, _, _ = bpmn_converter(powl)
-    bpmn = layouter.apply(bpmn)
+    bpmn, _, _ = to_bpmn(powl)
+    bpmn = bpmn_layouter.apply(bpmn)
     return bpmn
