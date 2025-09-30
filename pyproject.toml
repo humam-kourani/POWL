@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = 'powl'
+dynamic = ["version", "dependencies"]
+description = 'POWL Miner: Process Mining with the Partially Ordered Workflow Language'
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE.txt" }
+authors = [
+  { name = "Humam Kourani", email = "humam.kourani@fit.fraunhofer.de" }
+]
+keywords = ["process mining", "business process management"]
+classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
+    ]
+
+[project.urls]
+"Repository" = "https://github.com/humam-kourani/POWL"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["powl*"]
+
+[tool.setuptools.package-data]
+"powl.visualization.powl.variants.icons" = ["*.svg"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+version = { attr = "powl.__version__" }
