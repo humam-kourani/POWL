@@ -434,20 +434,25 @@ class DecisionGraph(POWL):
     def simplify(self) -> POWL:
         if len(self.children) == 1:
             child_0 = self.children[0]
-            if self.order.is_edge(self.start, self.end):
-                if isinstance(child_0, OperatorPOWL) and child_0.operator is Operator.LOOP:
-                    if isinstance(child_0.children[0], SilentTransition):
-                        return OperatorPOWL(Operator.LOOP, child_0.children).simplify()
-                    elif isinstance(child_0.children[1], SilentTransition):
-                        return OperatorPOWL(Operator.LOOP, list(reversed(child_0.children))).simplify()
-                elif isinstance(child_0, DecisionGraph):
-                    child_0.empty_path = True
-                    child_0.order.add_edge(child_0.start, child_0.end)
-                    return child_0.simplify()
+            skippable = self.order.is_edge(self.start, self.end)
+            repeatable = self.order.is_edge(child_0, child_0)
+
+            if skippable:
+                if repeatable:
+                    return OperatorPOWL(Operator.LOOP, [SilentTransition(), child_0]).simplify()
+                else:
+                    if isinstance(child_0, DecisionGraph):
+                        child_0.empty_path = True
+                        child_0.order.add_edge(child_0.start, child_0.end)
+                        return child_0.simplify()
+                    else:
+                        return OperatorPOWL(Operator.XOR, [SilentTransition(), child_0]).simplify()
+
+            elif repeatable:
+                return OperatorPOWL(Operator.LOOP, [child_0, SilentTransition()]).simplify()
+
             else:
                 return child_0.simplify()
-
-            new_dg = self
 
         else:
             new_dg = self.__group_pure_xor()
@@ -464,18 +469,25 @@ class DecisionGraph(POWL):
             if len(res.children) < len(new_dg.children):
                 return res.simplify()
 
-        new_children_map = {}
-        for child in new_dg.children:
-            s_child = child.simplify()
-            new_children_map[child] = s_child
-        return new_dg.__apply_mapping(new_children_map)
+            new_children_map = {}
+            for child in new_dg.children:
+                s_child = child.simplify()
+                new_children_map[child] = s_child
+            return new_dg.__apply_mapping(new_children_map)
 
     def simplify_using_frequent_transitions(self) -> POWL:
         if len(self.children) == 1:
             child_0 = self.children[0]
+
             if isinstance(child_0, Transition):
-                if self.order.is_edge(self.start, self.end):
-                    return FrequentTransition(label=child_0.label, min_freq=0, max_freq=1)
+                skippable = self.order.is_edge(self.start, self.end)
+                repeatable = self.order.is_edge(child_0, child_0)
+
+                min_freq = 0 if skippable else 1
+                max_freq = "-" if repeatable else 1
+
+                if skippable or repeatable:
+                    return FrequentTransition(label=child_0.label, min_freq=min_freq, max_freq=max_freq)
                 else:
                     return child_0
 
