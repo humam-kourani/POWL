@@ -17,10 +17,10 @@ class POWLFlowerModelUVCL(FlowerModelUVCL):
     def apply(cls, obj: IMDataStructureUVCL, pool: Pool = None, manager: Manager = None, parameters: Optional[Dict[str, Any]] = None) -> Optional[
         Tuple[OperatorPOWL, List[IMDataStructureUVCL]]]:
         log = obj.data_structure
-        uvcl_do = UVCL()
-        for a in sorted(list(comut.get_alphabet(log))):
-            uvcl_do[(a,)] = 1
         uvcl_redo = UVCL()
+        for a in sorted(list(comut.get_alphabet(log))):
+            uvcl_redo[(a,)] = 1
+        uvcl_do = UVCL()
         im_uvcl_do = IMDataStructureUVCL(uvcl_do)
         im_uvcl_redo = IMDataStructureUVCL(uvcl_redo)
         return OperatorPOWL(Operator.LOOP, []), [im_uvcl_do, im_uvcl_redo]
@@ -37,11 +37,11 @@ class POWLFlowerModelDFG(FlowerModelDFG):
             .union(set(x[0] for x in obj.dfg.graph))
             .union(set(x[1] for x in obj.dfg.graph))
         )
-        dfg_do = DFG()
-        for a in activities:
-            dfg_do.start_activities[a] = 1
-            dfg_do.end_activities[a] = 1
         dfg_redo = DFG()
+        for a in activities:
+            dfg_redo.start_activities[a] = 1
+            dfg_redo.end_activities[a] = 1
+        dfg_do = DFG()
         im_dfg_do = IMDataStructureDFG(InductiveDFG(dfg_do))
         im_dfg_redo = IMDataStructureDFG(InductiveDFG(dfg_redo))
         return OperatorPOWL(Operator.LOOP, []), [im_dfg_do, im_dfg_redo]
