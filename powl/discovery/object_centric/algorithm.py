@@ -3,10 +3,12 @@ from pm4py.objects.ocel.obj import OCEL
 from pm4py.util import exec_utils
 from typing import Optional, Dict, Any
 from powl.discovery.object_centric.variants.flattening import miner as flatten_miner
+from powl.discovery.object_centric.variants.oc_powl import miner as oc_powl_miner
 
 
 class Variants(Enum):
     FLATTENING = flatten_miner
+    OC_POWL = oc_powl_miner
 
 
 def apply(

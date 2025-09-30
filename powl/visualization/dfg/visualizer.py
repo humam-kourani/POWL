@@ -4,9 +4,8 @@ from powl.visualization.dfg.variants import base
 from enum import Enum
 from pm4py.util import exec_utils
 from copy import deepcopy
-from typing import Optional, Dict, Any, Tuple
+from pm4py.objects.dfg.obj import DFG
 import graphviz
-from pm4py.objects.log.obj import EventLog
 
 
 class Variants(Enum):
@@ -16,34 +15,22 @@ class Variants(Enum):
 DEFAULT_VARIANT = Variants.BASE
 
 
-def apply(dfg0: Dict[Tuple[str, str], float], log: EventLog = None, activities_count : Dict[str, int] = None, serv_time: Dict[str, float] = None, parameters: Optional[Dict[Any, Any]] = None, variant=DEFAULT_VARIANT) -> graphviz.Digraph:
+def apply(dfg: DFG, variant=DEFAULT_VARIANT) -> graphviz.Digraph:
     """
     Visualize a frequency/performance directly-follows graph
 
     Parameters
     -----------------
-    dfg0
+    dfg
         Directly-follows graph
-    log
-        (if provided) Event log for the calculation of statistics
-    activities_count
-        (if provided) Dictionary associating to each activity the number of occurrences in the log.
-    serv_time
-        (if provided) Dictionary associating to each activity the average service time
-    parameters
-        Variant-specific parameters
-    variant
-        Variant:
-        - Frequency DFG representation
-        - Performance DFG representation
 
     Returns
     -----------------
     gviz
         Graphviz digraph
     """
-    dfg = deepcopy(dfg0)
-    return exec_utils.get_variant(variant).apply(dfg, log=log, activities_count=activities_count, serv_time=serv_time, parameters=parameters)
+    dfg_obj = deepcopy(dfg)
+    return exec_utils.get_variant(variant).apply(dfg_obj)
 
 
 def save(gviz, output_file_path, parameters=None):

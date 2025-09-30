@@ -1,14 +1,17 @@
+import os
+from abc import ABC
+from enum import Enum
 from itertools import combinations
 from typing import Optional, Tuple, List, TypeVar, Generic, Dict, Any, Type
 
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 from pm4py.algo.discovery.inductive.fall_through.empty_traces import EmptyTracesUVCL
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
-from pm4py.algo.discovery.inductive.variants.abc import InductiveMinerFramework
+from pm4py.util import constants
 from pm4py.util import exec_utils
 from pm4py.objects.dfg.obj import DFG
 
-from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL
+from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL, Sequence
 from powl.discovery.total_order_based.inductive.fall_through.empty_traces import POWLEmptyTracesUVCL
 from powl.discovery.total_order_based.inductive.base_case.factory import BaseCaseFactory
 from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory
@@ -24,8 +27,31 @@ from copy import copy
 
 T = TypeVar('T', bound=IMDataStructureUVCL)
 
+class Parameters(Enum):
+    MULTIPROCESSING = "multiprocessing"
 
-class IMBasePOWL(Generic[T], InductiveMinerFramework[T]):
+
+class IMBasePOWL(ABC, Generic[T]):
+
+    def __init__(self, parameters: Optional[Dict[str, Any]] = None):
+        if parameters is None:
+            parameters = {}
+
+        enable_multiprocessing = exec_utils.get_param_value(
+            Parameters.MULTIPROCESSING,
+            parameters,
+            constants.ENABLE_MULTIPROCESSING_DEFAULT,
+        )
+
+        if enable_multiprocessing:
+            from multiprocessing import Pool, Manager
+
+            self._pool = Pool(os.cpu_count() - 1)
+            self._manager = Manager()
+            self._manager.support_list = []
+        else:
+            self._pool = None
+            self._manager = None
 
     def instance(self) -> POWLDiscoveryVariant:
         return POWLDiscoveryVariant.TREE
@@ -33,7 +59,7 @@ class IMBasePOWL(Generic[T], InductiveMinerFramework[T]):
     def empty_traces_cut(self) -> Type[EmptyTracesUVCL]:
         return POWLEmptyTracesUVCL
 
-    def apply(self, obj: IMDataStructureUVCL, parameters: Optional[Dict[str, Any]] = None, second_iteration: bool = False) -> POWL:
+    def apply(self, obj: T, parameters: Optional[Dict[str, Any]] = None, second_iteration: bool = False) -> POWL:
 
         # empty_traces = self.empty_traces_cut().apply(obj, parameters)
         # if empty_traces is not None:
@@ -113,6 +139,8 @@ class IMBasePOWL(Generic[T], InductiveMinerFramework[T]):
     def _recurse(self, powl: POWL, objs: List[T], parameters: Optional[Dict[str, Any]] = None):
         children = [self.apply(obj, parameters=parameters) for obj in objs]
         if isinstance(powl, StrictPartialOrder):
+            if isinstance(powl, Sequence):
+                return Sequence(children)
             powl_new = StrictPartialOrder(children)
             for i, j in combinations(range(len(powl.children)), 2):
                 if powl.order.is_edge_id(i, j):

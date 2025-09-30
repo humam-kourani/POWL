@@ -4,12 +4,14 @@ from itertools import combinations, product
 from typing import Optional, List, Any, Generic, Dict, Collection, Tuple
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from pm4py.objects.dfg import util as dfu
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import DecisionGraph, POWL
 from pm4py.objects.process_tree.obj import Operator
+from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.objects.dfg.obj import DFG
 
 
 class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
@@ -73,11 +75,12 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
 
         transitive_predecessors, transitive_successors = dfu.get_transitive_relations(dfg)
 
-        for a in alphabet:
-            if a not in start_activities and len(set(transitive_predecessors[a]) & start_activities) == 0:
-                alphabet = [elm for elm in alphabet if elm != a]
-            if a not in end_activities and len(set(transitive_successors[a]) & end_activities) == 0:
-                alphabet = [elm for elm in alphabet if elm != a]
+        def keep(a):
+            ok_start = (a in start_activities) or (len(set(transitive_predecessors[a]) & start_activities) > 0)
+            ok_end = (a in end_activities) or (len(set(transitive_successors[a]) & end_activities) > 0)
+            return ok_start and ok_end
+
+        alphabet = [a for a in alphabet if keep(a)]
 
         parameters["alphabet"] = alphabet
         parameters["transitive_successors"] = transitive_successors
@@ -127,3 +130,39 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
 
         return [IMDataStructureUVCL(l) for l in logs]
 
+
+class MaximalDecisionGraphCutDFG(MaximalDecisionGraphCut[IMDataStructureDFG], ABC):
+    @classmethod
+    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
+                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+
+        base_dfg = obj.dfg
+        dfg_map = {group: DFG() for group in groups}
+
+        activity_to_group_map = {}
+        for group in groups:
+            for activity in group:
+                activity_to_group_map[activity] = group
+
+        for (a, b) in base_dfg.graph:
+            group_a = activity_to_group_map[a]
+            group_b = activity_to_group_map[b]
+            freq = base_dfg.graph[(a, b)]
+            if group_a == group_b:
+                dfg_map[group_a].graph[(a, b)] = freq
+            else:
+                dfg_map[group_a].end_activities[a] += freq
+                dfg_map[group_b].start_activities[b] += freq
+        for a in base_dfg.start_activities:
+            group_a = activity_to_group_map[a]
+            dfg_map[group_a].start_activities[a] += base_dfg.start_activities[a]
+        for a in base_dfg.end_activities:
+            group_a = activity_to_group_map[a]
+            dfg_map[group_a].end_activities[a] += base_dfg.end_activities[a]
+
+        return list(
+            map(
+                lambda g: IMDataStructureDFG(InductiveDFG(dfg=dfg_map[g], skip=False)),
+                groups,
+            )
+        )

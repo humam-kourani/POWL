@@ -1,16 +1,19 @@
+from collections import Counter
 from itertools import product
 from abc import ABC
 from itertools import combinations
 from typing import Any, Optional, Dict, List, Generic, Tuple, Collection
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import StrictPartialOrder, POWL
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import \
-    project_on_groups_with_unique_activities
+    project_on_groups_with_unique_activities, MaximalPartialOrderCutDFG
 from pm4py.objects.dfg import util as dfu
+
+from powl.objects.utils.relation import get_transitive_closure_from_counter
 
 ORDER_FREQUENCY_RATIO = "order frequency ratio"
 
@@ -22,7 +25,12 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
 
     # Step 1: Generate Order based on the EFG
     po = BinaryRelation([tuple(c) for c in sorted(clusters)])
-    efg_freq = compute_efg_frequencies(obj, groups=po.nodes)
+    if type(obj) is IMDataStructureUVCL:
+        efg_freq = compute_efg_frequencies(obj, groups=po.nodes)
+    elif type(obj) is IMDataStructureDFG:
+        efg_freq = compute_dfg_transitive_closure(obj.dfg.graph, groups=po.nodes)
+    else:
+        raise NotImplementedError
 
     changed = False
     for i in range(len(po.nodes)):
@@ -127,6 +135,26 @@ def compute_efg_frequencies(interval_log: IMDataStructureUVCL, groups) -> Dict[T
     return res
 
 
+def compute_dfg_transitive_closure(dfg: Counter, groups) -> Dict[Tuple[str, str], int]:
+
+    closure = get_transitive_closure_from_counter(dfg)
+
+    activity_to_cluster = {}
+    for cluster in groups:
+        for activity in cluster:
+            activity_to_cluster[activity] = cluster
+
+    result = {(g1, g2): 0 for g1 in groups for g2 in groups}
+    for a, bs in closure.items():
+        for b in bs:
+            cluster_1 = activity_to_cluster.get(a)
+            cluster_2 = activity_to_cluster.get(b)
+            pair = (cluster_1, cluster_2)
+            result[pair] += 1 # count is just existence
+
+    return result
+
+
 class DynamicClusteringFrequencyPartialOrderCut(Cut[T], ABC, Generic[T]):
 
     @classmethod
@@ -170,3 +198,11 @@ class DynamicClusteringFrequencyPartialOrderCutUVCL(DynamicClusteringFrequencyPa
     def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
                 parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
         return project_on_groups_with_unique_activities(obj.data_structure, groups)
+
+
+class DynamicClusteringFrequencyPartialOrderCutDFG(DynamicClusteringFrequencyPartialOrderCut[IMDataStructureDFG]):
+
+    @classmethod
+    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
+                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+        return MaximalPartialOrderCutDFG.project(obj, groups, parameters)

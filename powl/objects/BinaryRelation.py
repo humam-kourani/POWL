@@ -77,7 +77,7 @@ class BinaryRelation:
             self._edges = new_edges
             self._number_nodes = n + 1
 
-    def is_edge(self, source: T, target: T) -> bool:
+    def is_edge(self, source, target) -> bool:
         try:
             i = self._map_node_to_id[source]
             j = self._map_node_to_id[target]
