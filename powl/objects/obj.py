@@ -464,7 +464,7 @@ class DecisionGraph(POWL):
                 return child_0.simplify()
 
         else:
-            new_dg = self.__group_pure_xor()
+            new_dg = self
 
             seq = new_dg.__group_start_seq()
             if seq:
@@ -524,7 +524,6 @@ class DecisionGraph(POWL):
 
         old_size = len(new_dg.children) + 1
         while len(new_dg.children) < old_size:
-            new_dg = new_dg.__group_pure_xor()
             old_size = len(new_dg.children)
             new_dg = new_dg.__group_pure_seq()
 
@@ -589,31 +588,31 @@ class DecisionGraph(POWL):
                 mapping[key] = key
         return mapping
 
-    def __group_pure_xor(self):
-        new_dg = deepcopy(self)
-        visited = set()
-        for child in list(self.children):
-            if child not in visited:
-                visited.add(child)
-                post1 = new_dg.order.get_postset(child)
-                pre1 = new_dg.order.get_preset(child)
-                if len(pre1) > 1 or len(post1) > 1:
-                    candidates_for_xor = [child2 for child2 in new_dg.children if
-                                          pre1 == new_dg.order.get_preset(child2) and post1 == new_dg.order.get_postset(
-                                              child2)]
-                    if len(candidates_for_xor) > 1:
-                        visited.update(candidates_for_xor)
-
-                        new_rel = BinaryRelation(candidates_for_xor)
-                        empty_path = False
-                        edges_to_remove = None
-                        if all(new_dg.order.is_edge(pre, post) for pre in pre1 for post in post1):
-                            empty_path = True
-                            edges_to_remove = [(pre, post) for pre in pre1 for post in post1]
-                        dg_child = DecisionGraph(new_rel, candidates_for_xor, candidates_for_xor, empty_path)
-                        mapping = new_dg.__create_mapping(candidates_for_xor, dg_child)
-                        new_dg = new_dg.__apply_mapping(mapping, edges_to_remove)
-        return new_dg
+    # def __group_pure_xor(self):
+    #     new_dg = deepcopy(self)
+    #     visited = set()
+    #     for child in list(self.children):
+    #         if child not in visited:
+    #             visited.add(child)
+    #             post1 = new_dg.order.get_postset(child)
+    #             pre1 = new_dg.order.get_preset(child)
+    #             if len(pre1) > 1 or len(post1) > 1:
+    #                 candidates_for_xor = [child2 for child2 in new_dg.children if
+    #                                       pre1 == new_dg.order.get_preset(child2) and post1 == new_dg.order.get_postset(
+    #                                           child2)]
+    #                 if len(candidates_for_xor) > 1:
+    #                     visited.update(candidates_for_xor)
+    #
+    #                     new_rel = BinaryRelation(candidates_for_xor)
+    #                     empty_path = False
+    #                     edges_to_remove = None
+    #                     if all(new_dg.order.is_edge(pre, post) for pre in pre1 for post in post1):
+    #                         empty_path = True
+    #                         edges_to_remove = [(pre, post) for pre in pre1 for post in post1]
+    #                     dg_child = DecisionGraph(new_rel, candidates_for_xor, candidates_for_xor, empty_path)
+    #                     mapping = new_dg.__create_mapping(candidates_for_xor, dg_child)
+    #                     new_dg = new_dg.__apply_mapping(mapping, edges_to_remove)
+    #     return new_dg
 
     def __group_pure_seq(self):
         for child in list(self.children):
