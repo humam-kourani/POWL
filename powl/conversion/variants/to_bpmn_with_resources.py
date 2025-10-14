@@ -29,7 +29,7 @@ def apply(pool_data: dict, lane_data: dict, powl) -> str:
     )
     model_dims = utils.get_model_dimensions(bpmn)
     pools = utils.construct_pools(
-        ordered_lanes_and_pools, lane_data, model_dims[0], model_dims[1]
+        ordered_lanes_and_pools, lane_data, model_dims
     )
     lanes = [pool.get_lanes() for pool in pools]
     lanes = [lane for sublist in lanes for lane in sublist]  # Flatten

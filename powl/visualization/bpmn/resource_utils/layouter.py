@@ -294,7 +294,7 @@ def identify_edges_id(root: etree._Element) -> List[str]:
     return [eid for eid in edge_ids if eid is not None]
 
 
-def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int, int]:
+def get_model_dimensions(root: etree._Element, padding: float = 30) -> List[int]:
     """
     Get the dimensions of the model.
     """
@@ -320,6 +320,7 @@ def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int
 
     max_right_edge = 0.0
     max_bottom_edge = 0.0
+    max_height = 0.0
 
     for bound in all_bounds:
         if not all(attr in bound.attrib for attr in ["x", "y", "width", "height"]):
@@ -329,10 +330,12 @@ def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int
         y = float(bound.get("y"))
         width = float(bound.get("width"))
         height = float(bound.get("height"))
+        if height > max_height:
+            max_height = height
         max_right_edge = max(max_right_edge, x + width)
         max_bottom_edge = max(max_bottom_edge, y + height)
 
-    return int(max_right_edge + padding), int(max_bottom_edge + padding)
+    return [int(max_right_edge + padding), int(max_bottom_edge + padding), int(max_height)]
 
 
 def task_name_to_id(root: etree._Element) -> dict:
@@ -440,14 +443,16 @@ def order_lanes_and_pools(
 def construct_pools(
     pool_data: Dict[str, List[str]],
     lane_data: Dict[str, List[str]],
-    lane_width: int,
-    lane_height: int,
+    model_dimensions : List[int],
     padding=50,
     vertical_padding=30,
 ) -> List[Pool]:
     """
     This function takes the xml output and the pool data and constructs a list of Pool objects accordingly.
     """
+    print(f"Model dimensions: {model_dimensions}")
+    lane_width, lane_height, lane_padding = model_dimensions[0], model_dimensions[1], model_dimensions[2]
+    lane_height += lane_padding
     # get the pools from the xml output
     current_height = 0
     list_of_pools = []
@@ -677,59 +682,52 @@ def __construct_auxiliary_points(
     offset,
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set_docking_pts = set([docking_pt_src, docking_pt_tgt])
-    # TO BE REWRITTEN
-    possible_aux_point_1, possible_aux_point_2 = [], []
+    pathways = []
     if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
         # Base case, just return none twice
-        possible_aux_point_1.append(None)
-        possible_aux_point_2.append(None)
+        pathways.append([None, None])
     # Now, let's try S-shape
     if set_docking_pts == {DockingDirection.LEFT, DockingDirection.RIGHT}:
         # S-shaped curvature with vertical twist
         aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
         aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
-        possible_aux_point_1.append(aux_pt_1)
-        possible_aux_point_2.append(aux_pt_2)
+        pathways.append([aux_pt_1, aux_pt_2])
     elif set_docking_pts == {DockingDirection.TOP, DockingDirection.BOTTOM}:
         # S-shaped curvature with horizontal twist
         aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
         aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
-        possible_aux_point_1.append(aux_pt_1)
-        possible_aux_point_2.append(aux_pt_2)
-    # A C-shape is only possible if the docking points are the same
+        pathways.append([aux_pt_1, aux_pt_2])
     elif docking_pt_src == docking_pt_tgt:
         if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
-            # C-shaped curvature with vertical twist
-            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1] + offset
-            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1] + offset
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
+            # C-shaped curvature with vertical 
+            # We fix the x-coordinate for the vertical case
+            x_coord = min(path_start[0], path_end[0]) if docking_pt_src == DockingDirection.LEFT else max(path_start[0], path_end[0])
+            aux_pt_1 = x_coord + offset, path_start[1]
+            aux_pt_2 = x_coord + offset, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
             # Minus outset, too
-            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1] - offset
-            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1] - offset
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
+            aux_pt_1 = x_coord - offset, path_start[1]
+            aux_pt_2 = x_coord - offset, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
         else:
             # C-shaped curvature with horizontal twist
-            aux_pt_1 = path_start[0] + offset, (path_start[1] + path_end[1]) / 2
-            aux_pt_2 = path_end[0] + offset, (path_start[1] + path_end[1]) / 2
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
+            # We fix the y-coordinate for the horizontal case
+            y_coord = min(path_start[1], path_end[1]) if docking_pt_src == DockingDirection.BOTTOM else max(path_start[1], path_end[1])
+            aux_pt_1 = path_start[0], y_coord + offset
+            aux_pt_2 = path_end[0], y_coord + offset
             # Minus outset, too
-            aux_pt_1 = path_start[0] - offset, (path_start[1] + path_end[1]) / 2
-            aux_pt_2 = path_end[0] - offset, (path_start[1] + path_end[1]) / 2
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
+            pathways.append([aux_pt_1, aux_pt_2])
+            aux_pt_1 = path_start[0], y_coord - offset
+            aux_pt_2 = path_end[0], y_coord - offset
+            pathways.append([aux_pt_1, aux_pt_2])
 
-    # We have two possibilities here, we add both
+
     # 1. L-shaped with (x1, y2)
-    possible_aux_point_1.append((path_start[0], path_end[1]))
-    possible_aux_point_2.append(None)
+    pathways.append([(path_start[0], path_end[1]), None])
     # 2. L-shaped with (x2, y1)
-    possible_aux_point_1.append(None)
-    possible_aux_point_2.append((path_end[0], path_start[1]))
+    pathways.append([None, (path_end[0], path_start[1])])
 
-    return possible_aux_point_1, possible_aux_point_2
+    return pathways
 
 
 def __get_docking_point_name(
@@ -812,20 +810,19 @@ def __construct_possible_paths(
         and not shapely.equals(shape, target_shape)
     ]
     # Get target height for outset
-    offset = 1.5 * max(target_coords[3], source_coords[3])
+    offset = 0.5 * max(target_coords[3], source_coords[3])
     for src, target in paths:
         # Check if the path intersects with any of the shapes
         docking_pt_source = __get_docking_point_name(src, source_coords)
         docking_pt_target = __get_docking_point_name(target, target_coords)
-        auxiliary_point_1, auxiliary_point_2 = __construct_auxiliary_points(
+        pathways = __construct_auxiliary_points(
             src, target, docking_pt_source, docking_pt_target, offset
         )
-        for i in range(len(auxiliary_point_1)):
+        for i in range(len(pathways)):
             points_to_add = []
-            if auxiliary_point_1[i] is not None:
-                points_to_add.append(auxiliary_point_1[i])
-            if auxiliary_point_2[i] is not None:
-                points_to_add.append(auxiliary_point_2[i])
+            for point in pathways[i]:
+                if point is not None:
+                    points_to_add.append(point)
             constructed_path = [src, *points_to_add, target]
             multilane_path = __turn_points_into_multi_linestring(constructed_path)
             backup_path = constructed_path
@@ -921,7 +918,6 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
             message_flows.append((seq_flow, source, target))
         # Should be embedded here though
         path = connect_points(src_coords, tgt_coords, shapes, prev_paths)
-        print(f"I have found a new path for {seq_flow}: {path}")
         prev_paths.append(path)
         root = __update_sequence_flow_positions(seq_flow, path, root)
     return root, message_flows
@@ -1159,7 +1155,6 @@ def __add_collaboration(
     for proc in new_processes:
         root.append(proc)
 
-    print(f"Creating message flows: {msg_flows}")
     for flow_id, source_id, target_id in msg_flows:
         etree.SubElement(
             collaboration,

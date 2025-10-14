@@ -138,3 +138,5 @@ dmypy.json
 *.gpickle
 # Books for testing
 *.ipynb
+# BPMN models
+*.bpmn
