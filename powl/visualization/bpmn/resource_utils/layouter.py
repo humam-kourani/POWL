@@ -1,5 +1,6 @@
 import ast
 import itertools
+import random
 from collections import defaultdict
 
 import subprocess
@@ -502,6 +503,20 @@ def construct_lanes(
         lanes.append(Lane(up_left, down_right, name, activities))
     return lanes
 
+def __preprocess_start_event(root : etree._Element, element_id):
+    # We have to get rid of the     isInterrupting="false" attribute of the start event
+    ns = root.nsmap
+    BPMN_NS = ns.get("bpmn")
+    if not BPMN_NS:
+        raise Exception(
+            "BPMN namespace not found in the document. Cannot preprocess start event."
+        )
+    start_event_tag = f"{{{BPMN_NS}}}startEvent"
+    start_event = root.find(f".//{start_event_tag}[@id='{element_id}']")
+    if start_event is not None and "isInterrupting" in start_event.attrib:
+        del start_event.attrib["isInterrupting"]
+        print(f"Removed 'isInterrupting' attribute from start event '{element_id}'.")
+    return root
 
 def __edit_element_coordinates(
     root: etree._Element, element_id: str, coordinates: Tuple[float, float]
@@ -531,14 +546,17 @@ def __edit_element_coordinates(
         raise Exception(
             f"Element with id '{element_id}' not found in the XML. No changes made."
         )
+    if 'Start' in element_id:
+        root = __preprocess_start_event(root, element_id)
+
     return root
 
 
-def __get_y_coordinates_for_alignment(element_id: str, xml_output, lanes) -> float:
+def __get_y_coordinates_for_alignment(element_id: str, root: etree._Element, lanes) -> float:
     """
     This function retrieves the y-coordinate for aligning an element based on its neighbors.
     """
-    element_coordinates = __get_element_coordinates(xml_output, element_id)
+    element_coordinates = __get_element_coordinates(root, element_id)
     if not element_coordinates:
         return None
     # returns the middle y-coordinate of the element
@@ -810,7 +828,8 @@ def __construct_possible_paths(
         and not shapely.equals(shape, target_shape)
     ]
     # Get target height for outset
-    offset = 0.5 * max(target_coords[3], source_coords[3])
+    randomness = random.randrange(3, 9)/10
+    offset = randomness * max(target_coords[3], source_coords[3])
     for src, target in paths:
         # Check if the path intersects with any of the shapes
         docking_pt_source = __get_docking_point_name(src, source_coords)
@@ -884,12 +903,10 @@ def connect_points(
 
     return path
 
-
-def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
+def __identify_sequence_flows(root: etree._Element) -> List[str]:
     """
-    This function takes the xml output and the lanes and returns the xml output with the sequence flows
+    This function takes the xml output and returns the ids of the sequence flows
     """
-    # Get the sequence flows
     flows = []
     ns = root.nsmap
     if "bpmn" not in ns:
@@ -907,6 +924,15 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
     connections_dict = {
         seq_flow: (source, target) for seq_flow, source, target in flows
     }
+    return connections_dict
+
+
+def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
+    """
+    This function takes the xml output and the lanes and returns the xml output with the sequence flows
+    """
+    # Get the sequence flows
+    connections_dict = __identify_sequence_flows(root)
     # Get rid of previous sequence flows so we can add the new ones w/o any issues
     prev_paths = []
     message_flows = []
@@ -924,7 +950,7 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
 
 
 def __align_tasks(
-    lanes: List[Lane], xml_output: str, task_dict: Dict[str, str]
+    lanes: List[Lane], root: str, task_dict: Dict[str, str]
 ) -> Tuple[str, List[str]]:
     aligned_elements = []
     for lane in lanes:
@@ -937,93 +963,142 @@ def __align_tasks(
             aligned_elements.append(id_activity)
             lane.add_element(id_activity)
             # edit the coordinates of the task
-            task_coordinates = __get_element_coordinates(xml_output, id_activity)
+            task_coordinates = __get_element_coordinates(root, id_activity)
             new_coordinates = (task_coordinates[0], task_coordinates[1] + up_left[1])
-            xml_output = __edit_element_coordinates(
-                xml_output, id_activity, new_coordinates
+            root = __edit_element_coordinates(
+                root, id_activity, new_coordinates
             )
 
-    return xml_output, aligned_elements
+    return root, aligned_elements
 
+def __check_gateway_type(element_id: str, flows : Dict[str, Tuple[str, str]]) -> str:
+    """
+    This function checks if the gateway is diverging or converging
+    """
+    incoming, outgoing = 0, 0
+    for _, (source, target) in flows.items():
+        if source == element_id:
+            outgoing += 1
+        elif target == element_id:
+            incoming += 1
+    if incoming > outgoing:
+        return "converging"
+    elif outgoing > incoming:
+        return "diverging"
+    else:
+        return "mixed"
+    
 
 def __identify_nearest_aligned_element(
     element_id: str,
     aligned_pool_elements: List[str],
-    lanes: List[Lane],
-    xml_output: str,
+    seq_flows : Dict[str, Tuple[str, str]],
+    root: etree._Element,
 ) -> str:
     """
     This function identifies the nearest aligned element in the pool.
     """
-    min_x_distance = float("inf")
-    nearest_element = None
-    current_element_coordinates = __get_element_coordinates(xml_output, element_id)
-    for aligned_element in aligned_pool_elements:
-        element_coordinates = __get_element_coordinates(xml_output, aligned_element)
-        if element_coordinates is None:
-            continue
-        x_distance = abs(current_element_coordinates[0] - element_coordinates[0])
-        if x_distance < min_x_distance:
-            min_x_distance = x_distance
-            nearest_element = aligned_element
-    # Identify to which lane it belongs
+    predecessors, successors = [], []
+    for _, (source, target) in seq_flows.items():
+        if source == element_id and target in aligned_pool_elements:
+            successors.append(target)
+        elif target == element_id and source in aligned_pool_elements:
+            predecessors.append(source)
+    
+    # We will apply a heuristic here
+    if 'Gateway' in element_id:
+        # We have to check if it is diverging or converging
+        match_type = __check_gateway_type(element_id, seq_flows)
 
-    return nearest_element
+        match match_type:
+            case "converging":
+                if len(predecessors) > 0:
+                    return predecessors[0]
+            case "diverging":
+                if len(successors) > 0:
+                    return successors[0]
+            case _:
+                pass
+
+    
+    neighbors = predecessors + successors
+    if len(neighbors) > 0:
+        return neighbors[0]
+    else:
+        min_x_distance = float("inf")
+        nearest_element = None
+        current_element_coordinates = __get_element_coordinates(root, element_id)
+        for aligned_element in aligned_pool_elements:
+            element_coordinates = __get_element_coordinates(root, aligned_element)
+            if element_coordinates is None:
+                continue
+            x_distance = abs(current_element_coordinates[0] - element_coordinates[0])
+            if x_distance < min_x_distance:
+                min_x_distance = x_distance
+                nearest_element = aligned_element
+        # Identify to which lane it belongs
+
+        return nearest_element
 
 
 def __align_elements(
-    xml_output: str,
+    root: etree._Element,
     coloring: Dict[str, str],
     aligned_elements: List[str],
     lanes: List[Lane],
 ) -> Tuple[str, List[str]]:
-    """ """
+    # This is a simple heuristic to ensure that tasks are aligned first, then gateways, then events
+    # This ensures that the start and end events are connected to their respective predecessors/successors
+    # in a more natural way.
+    ordered_elements = sorted(
+        coloring.keys(),
+        key=lambda x: (0 if "Task" in x else (1 if "Gateway" in x else 2)),
+    )
+    seq_flows = __identify_sequence_flows(root)
+    coloring = {el: coloring[el] for el in ordered_elements}
     for el_id, color in coloring.items():
         if el_id in aligned_elements:
             continue
         # Otherwise, we need to locate the nearest element within the same pool
+            
         aligned_elements_within_pool = [
-            el for el in aligned_elements if coloring.get(el) == color
+            el for el in aligned_elements if coloring.get(el) == color \
+            and el != el_id
         ]
-        print(aligned_elements_within_pool)
         nearest_pool_element = __identify_nearest_aligned_element(
-            el_id, aligned_elements_within_pool, lanes, xml_output
-        )
-        print(
-            f"Element {el_id} is not aligned, nearest element is {nearest_pool_element}\n"
-            f"Elements in the same pool are {aligned_elements_within_pool}\n"
-            f"Color is {color} and already aligned elements are {aligned_elements} with coloring {coloring}\n"
+            el_id, aligned_elements_within_pool, seq_flows, root
         )
         if nearest_pool_element is not None:
             # Get the coordinates of the nearest element
             nearest_coordinates = __get_element_coordinates(
-                xml_output, nearest_pool_element
+                root, nearest_pool_element
             )
             # Get the lane of the nearest element
             nearest_y, corresponding_lane = __get_y_coordinates_for_alignment(
-                nearest_pool_element, xml_output, lanes
+                nearest_pool_element, root, lanes
             )
-            current_element_coordinates = __get_element_coordinates(xml_output, el_id)
+            current_element_coordinates = __get_element_coordinates(root, el_id)
             y_coordinate = (
                 current_element_coordinates[1] + corresponding_lane.get_up_left()[1]
             )
-            xml_output = __edit_element_coordinates(
-                xml_output, el_id, (current_element_coordinates[0], y_coordinate)
+            root = __edit_element_coordinates(
+                root, el_id, (current_element_coordinates[0], y_coordinate)
             )
             print(
                 f"Nearest element {nearest_pool_element} has coordinates {nearest_coordinates} and y-coordinate {nearest_y}"
             )
             corresponding_lane.add_element(el_id)
-            aligned_elements.append(el_id)
-    return xml_output
+            if el_id not in aligned_elements:
+                aligned_elements.append(el_id)
+    return root
 
 
-def __create_shapes(elements, xml_output: str):
+def __create_shapes(elements, root: etree._Element):
     """This function takes the xml output and returns a list of shapely objects"""
     list_of_shapes = []
     for element in elements:
         # get the coordinates of the element
-        element_coordinates = __get_element_coordinates(xml_output, element)
+        element_coordinates = __get_element_coordinates(root, element)
         # create a shapely object
         shape = shapely.box(
             element_coordinates[0],

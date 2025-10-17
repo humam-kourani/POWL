@@ -21,13 +21,25 @@ def execute_script():
     pm4py.view_petri_net(petri_net, initial_marking, final_marking, format="SVG")
 
     # Convert into a PM4Py BPMN model
+    """
+
     lane_data = {
-        'Lane1' : ['register request', 'reinitiate request', 'pay compensation', 'reject request'],
-        'Lane2' : ['examine casually', 'examine thoroughly', 'check ticket', 'decide']
+        'Lane1' : ['register request', 'reinitiate request', 'pay compensation', 'reject request', 'examine casually', 'examine thoroughly', 'check ticket', 'decide'],
     }
     pool_data = {
-        'Pool1' : ['Lane1', 'Lane2']
+        'Pool1' : ['Lane1']
         }
+    """
+    lane_data = {
+        'Lane1' : ['register request', 'reinitiate request', 'pay compensation', 'reject request'],
+        'Lane2' : ['examine casually', 'examine thoroughly'],
+        'Lane3' : ['check ticket', 'decide']
+    }
+    pool_data = {
+        'Pool1' : ['Lane1', 'Lane2'],
+        'Pool2' : ['Lane3']
+        }
+
     bpmn_model = to_bpmn_with_resources(pool_data, lane_data, model)
     # export it as .bpmn
     with open(r"./examples/powl_bpmn.bpmn", "w") as f:

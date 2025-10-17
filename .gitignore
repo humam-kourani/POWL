@@ -140,3 +140,4 @@ dmypy.json
 *.ipynb
 # BPMN models
 *.bpmn
+examples/*.svg
