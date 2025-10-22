@@ -4,7 +4,7 @@ import powl
 def execute_script():
 
     # Read event log (csv, xes, or xes.gz)
-    log = powl.import_event_log(r"../examples/hospital.csv")
+    log = powl.import_event_log(r"./examples/hospital.csv")
 
     # Discover POWL model
     model = powl.discover_from_partially_ordered_log(log)
@@ -13,7 +13,7 @@ def execute_script():
     powl.view(model)
 
     # Export visualization
-    powl.save_visualization(model, file_path=r"../examples/powl_vis.svg")
+    powl.save_visualization(model, file_path=r"./examples/powl_vis.svg")
 
     # Convert into a PM4Py Petri net
     petri_net, initial_marking, final_marking = powl.convert_to_petri_net(model)

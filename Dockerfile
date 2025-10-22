@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
     apt-get clean
 
 RUN pip install uv
-
 # Install the Python dependencies using uv
 COPY pyproject.toml poetry.lock /app/
 RUN uv install --no-dev

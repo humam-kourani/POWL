@@ -169,8 +169,18 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
             viz.node(this_node_id, label='', style='filled', fillcolor='black', shape='square',
                      width='0.3', height='0.3', fixedsize="true")
         else:
-            viz.node(this_node_id, str(powl.label), shape='box', fontsize=font_size, width=min_width, style='filled',
+            label = f"<{str(powl.label)}"
+            if powl._role is not None:
+                # Add a label to the box
+                label += f"""<br/><font color="red"><i>Role:</i> {powl._role}</font>"""
+            if powl._organization is not None:
+                # Add a label to the box
+                label += f"""<br/><font color="blue"><i>Org:</i> {powl._organization}</font>"""
+            label += ">"
+
+            viz.node(this_node_id, label, shape='box', fontsize=font_size, width=min_width, style='filled',
                      fillcolor=current_color)
+            
 
     elif isinstance(powl, StrictPartialOrder):
         transitive_reduction = powl.order.get_transitive_reduction()
