@@ -691,6 +691,79 @@ def __check_for_path_intersection(
         return False
     return True
 
+def __construct_s_shaped_flow(
+        path_start: Tuple[float, float],
+        path_end: Tuple[float, float],
+        docking_pt_src: DockingDirection,
+        docking_pt_tgt: DockingDirection,
+) ->List[List[Tuple[float, float]]]:
+    pathways = []
+    flow_direction = path_start[0] - path_end[0], path_start[1] - path_end[1]
+    left = flow_direction[0] < 0
+    # a bit weird but the coordinate system starts at top left (0, 0)
+    down = flow_direction[1] < 0
+    if docking_pt_src == DockingDirection.LEFT and docking_pt_tgt == DockingDirection.RIGHT \
+        and not left:
+            # S-shaped curvature with vertical twist
+            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
+            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.RIGHT and docking_pt_tgt == DockingDirection.LEFT \
+        and left:
+            # S-shaped curvature with vertical twist
+            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
+            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.TOP and docking_pt_tgt == DockingDirection.BOTTOM \
+        and not down:
+            # S-shaped curvature with horizontal twist
+            aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
+            aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.BOTTOM and docking_pt_tgt == DockingDirection.TOP \
+        and down:
+            # S-shaped curvature with horizontal twist
+            aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
+            aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
+            pathways.append([aux_pt_1, aux_pt_2])
+    return pathways
+
+def __construct_c_shaped_flow(
+    path_start: Tuple[float, float],
+    path_end: Tuple[float, float],
+    docking_pt_src: DockingDirection,
+    docking_pt_tgt: DockingDirection,
+    offset,
+) -> List[Tuple[float, float]]:
+    pathways = []
+    variable_offset = [0, 5, 10, 15, 20, 25]
+    if docking_pt_src == docking_pt_tgt:
+        if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
+            # C-shaped curvature with vertical 
+            # We fix the x-coordinate for the vertical case
+            x_coord = min(path_start[0], path_end[0]) if docking_pt_src == DockingDirection.LEFT else max(path_start[0], path_end[0])
+            for var_offset in variable_offset:
+                aux_pt_1 = x_coord + offset + var_offset, path_start[1]
+                aux_pt_2 = x_coord + offset + var_offset, path_end[1]
+                pathways.append([aux_pt_1, aux_pt_2])
+                # Minus outset, too
+                aux_pt_1 = x_coord - offset - var_offset, path_start[1]
+                aux_pt_2 = x_coord - offset - var_offset, path_end[1]
+                pathways.append([aux_pt_1, aux_pt_2])
+        else:
+            # C-shaped curvature with horizontal twist
+            # We fix the y-coordinate for the horizontal case
+            y_coord = min(path_start[1], path_end[1]) if docking_pt_src == DockingDirection.BOTTOM else max(path_start[1], path_end[1])
+            for var_offset in variable_offset:
+                aux_pt_1 = path_start[0], y_coord + offset + var_offset
+                aux_pt_2 = path_end[0], y_coord + offset + var_offset
+                # Minus outset, too
+                pathways.append([aux_pt_1, aux_pt_2])
+                aux_pt_1 = path_start[0], y_coord - offset - var_offset
+                aux_pt_2 = path_end[0], y_coord - offset - var_offset
+                pathways.append([aux_pt_1, aux_pt_2])
+    return pathways
+
 
 def __construct_auxiliary_points(
     path_start: Tuple[float, float],
@@ -701,49 +774,23 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set_docking_pts = set([docking_pt_src, docking_pt_tgt])
     pathways = []
+    pathways.extend(__construct_s_shaped_flow(
+        path_start, path_end, docking_pt_src, docking_pt_tgt))
+    pathways.extend(__construct_c_shaped_flow(
+        path_start, path_end, docking_pt_src, docking_pt_tgt, offset))
+
     if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
         # Base case, just return none twice
         pathways.append([None, None])
-    # Now, let's try S-shape
-    if set_docking_pts == {DockingDirection.LEFT, DockingDirection.RIGHT}:
-        # S-shaped curvature with vertical twist
-        aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
-        aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
-        pathways.append([aux_pt_1, aux_pt_2])
-    elif set_docking_pts == {DockingDirection.TOP, DockingDirection.BOTTOM}:
-        # S-shaped curvature with horizontal twist
-        aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
-        aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
-        pathways.append([aux_pt_1, aux_pt_2])
-    elif docking_pt_src == docking_pt_tgt:
-        if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
-            # C-shaped curvature with vertical 
-            # We fix the x-coordinate for the vertical case
-            x_coord = min(path_start[0], path_end[0]) if docking_pt_src == DockingDirection.LEFT else max(path_start[0], path_end[0])
-            aux_pt_1 = x_coord + offset, path_start[1]
-            aux_pt_2 = x_coord + offset, path_end[1]
-            pathways.append([aux_pt_1, aux_pt_2])
-            # Minus outset, too
-            aux_pt_1 = x_coord - offset, path_start[1]
-            aux_pt_2 = x_coord - offset, path_end[1]
-            pathways.append([aux_pt_1, aux_pt_2])
-        else:
-            # C-shaped curvature with horizontal twist
-            # We fix the y-coordinate for the horizontal case
-            y_coord = min(path_start[1], path_end[1]) if docking_pt_src == DockingDirection.BOTTOM else max(path_start[1], path_end[1])
-            aux_pt_1 = path_start[0], y_coord + offset
-            aux_pt_2 = path_end[0], y_coord + offset
-            # Minus outset, too
-            pathways.append([aux_pt_1, aux_pt_2])
-            aux_pt_1 = path_start[0], y_coord - offset
-            aux_pt_2 = path_end[0], y_coord - offset
-            pathways.append([aux_pt_1, aux_pt_2])
 
-
-    # 1. L-shaped with (x1, y2)
-    pathways.append([(path_start[0], path_end[1]), None])
-    # 2. L-shaped with (x2, y1)
-    pathways.append([None, (path_end[0], path_start[1])])
+    if docking_pt_src in {DockingDirection.BOTTOM, DockingDirection.TOP} and \
+          docking_pt_tgt in {DockingDirection.LEFT, DockingDirection.RIGHT}:
+        # 1. L-shaped with (x1, y2)
+        pathways.append([(path_start[0], path_end[1]), None])
+    if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT} and \
+            docking_pt_tgt in {DockingDirection.BOTTOM, DockingDirection.TOP}:
+        # 2. L-shaped with (x2, y1)
+        pathways.append([None, (path_end[0], path_start[1])])
 
     return pathways
 
@@ -1040,22 +1087,71 @@ def __identify_nearest_aligned_element(
 
         return nearest_element
 
+def __align_gateways(
+    root : etree._Element,
+    coloring: Dict[str, str],
+    aligned_elements: List[str],
+    lanes: List[Lane],
+    seq_flows : Dict[str, Tuple[str, str]],
+) -> Tuple[str, List[str]]:
+    # This function aligns the gateways in the BPMN diagram.
+    prev_iteration = aligned_elements.copy()
+    element_lane_mapping = {}
+    i = 0
+    while set(prev_iteration) != set(aligned_elements) or i < 3:
+        prev_iteration = aligned_elements.copy()
+        for el_id, color in coloring.items():
+            if "Gateway" not in el_id:
+                continue
+            # Otherwise, we need to locate the nearest element within the same pool
+                
+            aligned_elements_within_pool = [
+                el for el in aligned_elements if coloring.get(el) == color \
+                and el != el_id
+            ]
+            if len(aligned_elements_within_pool) == 0:
+                continue
+            nearest_pool_element = __identify_nearest_aligned_element(
+                el_id, aligned_elements_within_pool, seq_flows, root
+            )
+            if nearest_pool_element is not None:
+                # Get the coordinates of the nearest element
+                nearest_coordinates = __get_element_coordinates(
+                    root, nearest_pool_element
+                )
+                # Get the lane of the nearest element
+                nearest_y, corresponding_lane = __get_y_coordinates_for_alignment(
+                    nearest_pool_element, root, lanes
+                )
+                current_element_coordinates = __get_element_coordinates(root, el_id)
+                try:
+                    y_coordinate = (
+                        current_element_coordinates[1] + corresponding_lane.get_up_left()[1]
+                    )
+                    if y_coordinate > corresponding_lane.get_down_right()[1] - 20 \
+                        or y_coordinate < corresponding_lane.get_up_left()[1] + 20:
+                        continue
+                except AttributeError:
+                    continue
+                
+                root = __edit_element_coordinates(
+                    root, el_id, (current_element_coordinates[0], y_coordinate)
+                )
+                element_lane_mapping[el_id] = corresponding_lane
+                if el_id not in aligned_elements:
+                    aligned_elements.append(el_id)
+        i += 1
+    for el_id, lane in element_lane_mapping.items():
+        lane.add_element(el_id)
+    return root
 
-def __align_elements(
+def __align_events(
     root: etree._Element,
     coloring: Dict[str, str],
     aligned_elements: List[str],
     lanes: List[Lane],
-) -> Tuple[str, List[str]]:
-    # This is a simple heuristic to ensure that tasks are aligned first, then gateways, then events
-    # This ensures that the start and end events are connected to their respective predecessors/successors
-    # in a more natural way.
-    ordered_elements = sorted(
-        coloring.keys(),
-        key=lambda x: (0 if "Task" in x else (1 if "Gateway" in x else 2)),
-    )
-    seq_flows = __identify_sequence_flows(root)
-    coloring = {el: coloring[el] for el in ordered_elements}
+    seq_flows : Dict[str, Tuple[str, str]],
+    ) -> Tuple[str, List[str]]:
     for el_id, color in coloring.items():
         if el_id in aligned_elements:
             continue
@@ -1090,6 +1186,27 @@ def __align_elements(
             corresponding_lane.add_element(el_id)
             if el_id not in aligned_elements:
                 aligned_elements.append(el_id)
+    return root
+
+
+
+def __align_elements(
+    root: etree._Element,
+    coloring: Dict[str, str],
+    aligned_elements: List[str],
+    lanes: List[Lane],
+) -> etree._Element:
+    # This is a simple heuristic to ensure that tasks are aligned first, then gateways, then events
+    # This ensures that the start and end events are connected to their respective predecessors/successors
+    # in a more natural way.
+    ordered_elements = sorted(
+        coloring.keys(),
+        key=lambda x: (0 if "Task" in x else (1 if "Gateway" in x else 2)),
+    )
+    seq_flows = __identify_sequence_flows(root)
+    coloring = {el: coloring[el] for el in ordered_elements}
+    root = __align_gateways(root, coloring, aligned_elements, lanes, seq_flows)
+    root = __align_events(root, coloring, aligned_elements, lanes, seq_flows)
     return root
 
 

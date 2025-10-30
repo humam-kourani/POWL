@@ -6,6 +6,8 @@ from enum import Enum
 import powl
 
 import streamlit as st
+import streamlit.components.v1 as components
+
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
 from pm4py.objects.petri_net.exporter.variants.pnml import export_petri_as_string
@@ -14,7 +16,6 @@ from pm4py.util import constants
 from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
-
 
 class ViewType(Enum):
     BPMN = "BPMN"
@@ -133,12 +134,12 @@ def run_app():
                     pn, im, fm, parameters={"format": image_format}
                 )
                 vis_str = visualization.pipe(format="svg").decode("utf-8")
-            else:  # BPMN
+            else:
+
                 visualization = bpmn_visualizer.apply(
                     layouted_bpmn, parameters={"format": image_format}
                 )
                 vis_str = visualization.pipe(format="svg").decode("utf-8")
-
             with st.expander("View Image", expanded=True):
                 st.image(vis_str)
 
