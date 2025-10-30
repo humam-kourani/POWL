@@ -6,7 +6,6 @@ from enum import Enum
 import powl
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
