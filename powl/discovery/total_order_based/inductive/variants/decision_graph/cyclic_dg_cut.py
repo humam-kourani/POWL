@@ -1,7 +1,7 @@
 from abc import ABC
 from collections import Counter
 from itertools import combinations
-from typing import Optional, List, Any, Dict, Collection
+from typing import Optional, List, Any, Dict, Collection, Generic
 
 from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
@@ -11,7 +11,7 @@ from powl.discovery.total_order_based.inductive.variants.decision_graph.max_deci
     MaximalDecisionGraphCut
 
 
-class CyclicDecisionGraphCut(MaximalDecisionGraphCut, ABC):
+class CyclicDecisionGraphCut(MaximalDecisionGraphCut[T], ABC):
 
     @classmethod
     def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[List[Any]]:
