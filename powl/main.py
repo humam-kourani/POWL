@@ -53,7 +53,7 @@ def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
     return df
 
 
-def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
+def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC,
                   filtering_weight_factor: float = None, order_graph_filtering_threshold: float = None,
                   dfg_frequency_filtering_threshold: float = None,
                   activity_key: str = "concept:name", timestamp_key: str = "time:timestamp",
