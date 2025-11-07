@@ -101,6 +101,9 @@ class FrequentTransition(Transition):
 
         super().__init__(label=label)
 
+    def simplify(self):
+        raise Exception("Not allowed! You cannot call the simplify function on powl models annotated with frequency tags.")
+
     def __repr__(self):
         return f"FrequentTransition(activity={self.activity}, min_freq={self.min_freq}, max_freq={self.max_freq})"
 
