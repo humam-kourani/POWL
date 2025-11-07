@@ -46,7 +46,7 @@ def get_variant(variant: POWLDiscoveryVariant) -> Type[IMBasePOWL]:
 
 
 def apply(obj: Union[EventLog, pd.DataFrame, UVCL], parameters: Optional[Dict[Any, Any]] = None,
-          variant=DEFAULT_POWL_MINER) -> POWL:
+          variant=DEFAULT_POWL_MINER, simplify=True) -> POWL:
     if parameters is None:
         parameters = {}
     ack = exec_utils.get_param_value(Parameters.ACTIVITY_KEY, parameters, xes_util.DEFAULT_NAME_KEY)
@@ -60,6 +60,7 @@ def apply(obj: Union[EventLog, pd.DataFrame, UVCL], parameters: Optional[Dict[An
     algorithm = get_variant(variant)
     im = algorithm(parameters)
     res = im.apply(IMDataStructureUVCL(uvcl), parameters)
-    res = res.simplify()
+    if simplify:
+        res = res.simplify()
 
     return res
