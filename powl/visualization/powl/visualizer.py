@@ -1,4 +1,5 @@
 import base64
+import copy
 import os
 import re
 import shutil
@@ -87,7 +88,7 @@ def apply(powl: POWL, variant=DEFAULT_VARIANT, frequency_tags=True)\
     """
 
     if frequency_tags:
-        powl = powl.simplify_using_frequent_transitions()
+        powl = copy.deepcopy(powl).simplify_using_frequent_transitions()
 
     viz = exec_utils.get_variant(variant).apply(powl)
     svg_content = viz.pipe().decode('utf-8')
