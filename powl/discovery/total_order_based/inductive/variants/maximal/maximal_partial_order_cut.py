@@ -202,7 +202,7 @@ class MaximalPartialOrderCutUVCL(MaximalPartialOrderCut[IMDataStructureUVCL]):
     @classmethod
     def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
                 parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
-        project_on_groups_with_unique_activities(obj.data_structure, groups)
+        return project_on_groups_with_unique_activities(obj.data_structure, groups)
 
 
 
