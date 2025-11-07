@@ -153,7 +153,7 @@ class IMBasePOWL(ABC, Generic[T]):
             for i, j in combinations(range(len(powl.children)), 2):
                 if powl.order.is_edge(objs[i], objs[j]):
                     new_order.add_edge(children[i], children[j])
-                elif powl.order.is_edge(objs[j], objs[i]):
+                if powl.order.is_edge(objs[j], objs[i]):
                     new_order.add_edge(children[j], children[i])
             start_nodes = [children[i] for i in range(len(powl.children)) if objs[i] in powl.start_nodes]
             end_nodes = [children[i] for i in range(len(powl.children)) if objs[i] in powl.end_nodes]
