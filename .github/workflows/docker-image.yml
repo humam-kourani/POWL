@@ -29,6 +29,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/humam-kourani/powl:latest
+          tags: ghcr.io/humam-kourani/POWL:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
