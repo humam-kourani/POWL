@@ -15,7 +15,6 @@ from pm4py.util import constants
 from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
-from BPMN_to_Image import bpmn_to_svg
 
 class ViewType(Enum):
     BPMN = "BPMN"
@@ -81,7 +80,7 @@ def run_app():
                 )
 
                 st.session_state["model_gen"] = process_model
-                st.session_state["final_viz_str"] = None
+
             except Exception as e:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 st.error(body=f"Error during discovery: {e}", icon="⚠️")
@@ -124,25 +123,25 @@ def run_app():
             )
 
             image_format = str("svg").lower()
-            if st.session_state["final_viz_str"] is None:
 
-                if view_option == ViewType.POWL.value:
-                    from powl.visualization.powl import visualizer
+            if view_option == ViewType.POWL.value:
+                from powl.visualization.powl import visualizer
+                vis_str = visualizer.apply(powl_model)
 
-                    vis_str = visualizer.apply(powl_model)
-                    st.session_state["final_viz_str"] = vis_str
+            elif view_option == ViewType.PETRI.value:
+                visualization = pn_visualizer.apply(pn, im, fm,
+                                                    parameters={'format': image_format})
+                vis_str = visualization.pipe(format='svg').decode('utf-8')
+            else:  # BPMN
+                from pm4py.objects.bpmn.layout import layouter
+                layouted_bpmn = layouter.apply(bpmn)
+                visualization = bpmn_visualizer.apply(layouted_bpmn,
+                                                      parameters={'format': image_format})
+                vis_str = visualization.pipe(format='svg').decode('utf-8')
 
-                elif view_option == ViewType.PETRI.value:
-                    visualization = pn_visualizer.apply(
-                        pn, im, fm, parameters={"format": image_format}
-                    )
-                    vis_str = visualization.pipe(format="svg").decode("utf-8")
-                    st.session_state["final_viz_str"] = vis_str
-                else:
-                    vis_str = bpmn_to_svg(get_xml_string(layouted_bpmn).decode("utf-8"))
-                    st.session_state["final_viz_str"] = vis_str
             with st.expander("View Image", expanded=True):
-                st.image(st.session_state["final_viz_str"])
+                st.image(vis_str)
+
 
         except Exception as e:
             st.error(icon="⚠️", body=str(e))
