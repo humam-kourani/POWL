@@ -1,6 +1,9 @@
 import powl
 from powl.objects.obj import Transition, DecisionGraph, BinaryRelation
-def generate_process():
+from powl.conversion.variants.to_bpmn_with_resources import apply as to_bpmn_with_resources
+
+
+def generate_process_1():
     order_coffee = Transition("Order Coffee", "Customer", "Customer")
     pay = Transition("Pay", "Customer", "Customer")
     prepare_coffee = Transition("Prepare Coffee", "Cafe", "Barista")
@@ -15,5 +18,28 @@ def generate_process():
     # Visualize it
     powl.view(dg)
 
-generate_process()
+def generate_process_2():
+
+    log  = powl.import_event_log(r"./examples/running-example.csv")
+    model = powl.discover(log, dfg_frequency_filtering_threshold=0.0)
     
+
+    activity_to_pool_lane = {
+        'register request' : ("P1", 'Lane1'),
+        'reinitiate request' : ("P2", 'Lane1'),
+        'pay compensation' : ("P1", 'Lane1'),
+        'reject request' : ("P1", 'Lane1'),
+        'examine casually' : ("P2", 'Lane2'),
+        'examine thoroughly' : ("P1", 'Lane2'),
+        'check ticket' : ("P2", 'Lane3'),
+        'decide' : ("P1", 'Lane3'),
+    }
+
+    bpmn_model = to_bpmn_with_resources(activity_to_pool_lane, model)
+    # export it as .bpmn
+    with open(r"./examples/powl_bpmn.bpmn", "w") as f:
+        f.write(bpmn_model)
+
+
+if __name__ == "__main__":
+    generate_process_1()
