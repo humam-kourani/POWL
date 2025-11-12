@@ -7,6 +7,8 @@ from pm4py.util.compression.dtypes import UVCL
 from pm4py.util import exec_utils
 from pm4py.objects.log.obj import EventLog
 
+from powl.discovery.total_order_based.inductive.variants.im_decision_graph_cyclic import \
+    POWLInductiveMinerDecisionGraphCyclic
 from powl.objects.obj import POWL
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_clustering import POWLInductiveMinerDecisionGraphClustering
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_maximal import \
@@ -20,6 +22,8 @@ from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints
 
 from typing import Optional, Dict, Any, Union, Type
 import pandas as pd
+
+DEFAULT_POWL_MINER = POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC
 
 
 def get_variant(variant: POWLDiscoveryVariant) -> Type[IMBasePOWL]:
@@ -35,12 +39,14 @@ def get_variant(variant: POWLDiscoveryVariant) -> Type[IMBasePOWL]:
         return POWLInductiveMinerDecisionGraphMaximal
     elif variant == POWLDiscoveryVariant.DECISION_GRAPH_CLUSTERING:
         return POWLInductiveMinerDecisionGraphClustering
+    elif variant == POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC:
+        return POWLInductiveMinerDecisionGraphCyclic
     else:
         raise Exception('Invalid Variant!')
 
 
 def apply(obj: Union[EventLog, pd.DataFrame, UVCL], parameters: Optional[Dict[Any, Any]] = None,
-          variant=POWLDiscoveryVariant.MAXIMAL) -> POWL:
+          variant=DEFAULT_POWL_MINER, simplify=True) -> POWL:
     if parameters is None:
         parameters = {}
     ack = exec_utils.get_param_value(Parameters.ACTIVITY_KEY, parameters, xes_util.DEFAULT_NAME_KEY)
@@ -54,6 +60,7 @@ def apply(obj: Union[EventLog, pd.DataFrame, UVCL], parameters: Optional[Dict[An
     algorithm = get_variant(variant)
     im = algorithm(parameters)
     res = im.apply(IMDataStructureUVCL(uvcl), parameters)
-    res = res.simplify()
+    if simplify:
+        res = res.simplify()
 
     return res

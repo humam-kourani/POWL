@@ -53,13 +53,14 @@ def import_event_log(path: str, timestamp_key = None) -> pd.DataFrame:
     return df
 
 
-def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
+def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC,
                   filtering_weight_factor: float = None, order_graph_filtering_threshold: float = None,
                   dfg_frequency_filtering_threshold: float = None,
                   activity_key: str = "concept:name", timestamp_key: str = "time:timestamp",
                   case_id_key: str = "case:concept:name",
                   lifecycle_key: str = "lifecycle:transition",
                   keep_only_completion_events: bool = True,
+                  simplify=True
                   ) -> POWL:
     """
     Discovers a POWL model from an event log.
@@ -77,6 +78,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
     :param activity_key: attribute to be used for the activity
     :param timestamp_key: attribute to be used for the timestamp
     :param case_id_key: attribute to be used as case identifier
+    :param simplify: whether to simplify or not the POWL model
     :rtype: ``POWL``
     """
 
@@ -110,7 +112,7 @@ def discover(log: pd.DataFrame, variant=POWLDiscoveryVariant.DECISION_GRAPH_MAX,
         raise Exception("The algorithm can only be used with one filtering threshold at a time!")
 
     from powl.discovery.total_order_based import algorithm as powl_discovery
-    return powl_discovery.apply(log, variant=variant, parameters=properties)
+    return powl_discovery.apply(log, variant=variant, parameters=properties, simplify=simplify)
 
 
 def discover_petri_net_from_ocel(ocel: OCEL, parameters=None):
