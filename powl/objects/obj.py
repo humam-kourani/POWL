@@ -27,9 +27,11 @@ class POWL(ProcessTree, ABC):
 class Transition(POWL):
     transition_id: int = 0
 
-    def __init__(self, label: Optional[str] = None) -> None:
+    def __init__(self, label: Optional[str] = None, organization = None, role = None) -> None:
         super().__init__()
         self._label = label
+        self._organization = organization
+        self._role = role
         self._identifier = Transition.transition_id
         Transition.transition_id = Transition.transition_id + 1
 
@@ -51,6 +53,12 @@ class Transition(POWL):
         if isinstance(other, Transition):
             return self._label == other._label
         return False
+    
+    def set_organization(self, organization):
+        self._organization = organization
+    
+    def set_role(self, role):
+        self._role = role
 
     def __hash__(self) -> int:
         return self._identifier

@@ -6,6 +6,7 @@ from enum import Enum
 import powl
 
 import streamlit as st
+
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 from pm4py.objects.bpmn.layout import layouter as bpmn_layouter
 from pm4py.objects.petri_net.exporter.variants.pnml import export_petri_as_string
@@ -14,7 +15,6 @@ from pm4py.util import constants
 from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
-
 
 class ViewType(Enum):
     BPMN = "BPMN"
@@ -80,6 +80,7 @@ def run_app():
                 )
 
                 st.session_state["model_gen"] = process_model
+
             except Exception as e:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 st.error(body=f"Error during discovery: {e}", icon="⚠️")
@@ -93,7 +94,6 @@ def run_app():
         powl_model = st.session_state["model_gen"]
         bpmn, _, _ = bpmn_converter(powl_model)
         layouted_bpmn = bpmn_layouter.apply(bpmn)
-
         try:
             pn, im, fm = powl.convert_to_petri_net(powl_model)
 
@@ -123,24 +123,23 @@ def run_app():
             )
 
             image_format = str("svg").lower()
+
             if view_option == ViewType.POWL.value:
                 from powl.visualization.powl import visualizer
-
                 vis_str = visualizer.apply(powl_model)
 
             elif view_option == ViewType.PETRI.value:
-                visualization = pn_visualizer.apply(
-                    pn, im, fm, parameters={"format": image_format}
-                )
-                vis_str = visualization.pipe(format="svg").decode("utf-8")
+                visualization = pn_visualizer.apply(pn, im, fm,
+                                                    parameters={'format': image_format})
+                vis_str = visualization.pipe(format='svg').decode('utf-8')
             else:  # BPMN
-                visualization = bpmn_visualizer.apply(
-                    layouted_bpmn, parameters={"format": image_format}
-                )
-                vis_str = visualization.pipe(format="svg").decode("utf-8")
+                visualization = bpmn_visualizer.apply(layouted_bpmn,
+                                                      parameters={'format': image_format})
+                vis_str = visualization.pipe(format='svg').decode('utf-8')
 
             with st.expander("View Image", expanded=True):
                 st.image(vis_str)
+
 
         except Exception as e:
             st.error(icon="⚠️", body=str(e))

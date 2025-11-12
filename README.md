@@ -21,6 +21,22 @@ To run the Streamlit application on your own machine:
      ```bash
      streamlit run app.py
      ```
+#### <img src="https://raw.githubusercontent.com/mustay/dashboard-icons/master/png/docker.png" alt="Docker icon" width="20" height="20"> Docker:
+
+Alternatively, you can install it using the provided Docker image:
+
+1. Clone this repository.
+2. Build the Docker image:
+     ```bash
+     docker build -t powl .
+     ```
+3. Run the app:
+     ```bash
+     docker run -p 8501:8501 powl
+     ```
+
+
+
 
 ## 🐍 Installing as a Python Library
 

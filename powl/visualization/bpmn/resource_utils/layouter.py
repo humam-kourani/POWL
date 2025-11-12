@@ -1,5 +1,6 @@
 import ast
 import itertools
+import random
 from collections import defaultdict
 
 import subprocess
@@ -70,22 +71,22 @@ def apply_layouting(content_diagram: str) -> str:
 
 
 def __pools_to_tasks(
-    pools: Dict[str, str], lane_data: Dict[str, str]
+    activity_to_pool_lane: Dict[str, Tuple[str, str]]
 ) -> Dict[str, set]:
     """
     Convert pools to tasks based on the lane data.
-
-    :param pools: A dictionary where keys are pool names and values are sets of node contents.
-    :param lanes: A dictionary where keys are lane names and values are lists of task names.
-    :return: A dictionary where keys are pool names and values are sets of task names.
     """
-    pool_tasks = defaultdict(list)
-    for pool, lanes in pools.items():
-        for lane in lanes:
-            tasks_to_lane = lane_data.get(lane, [])
-            pool_tasks[pool].extend(tasks_to_lane)
+    pool_tasks = defaultdict(set)
+    for activity, (pool, _) in activity_to_pool_lane.items():
+        if pool is None:
+            if "DefaultPool" not in pool_tasks:
+                pool_tasks["DefaultPool"] = set()
+            pool_tasks["DefaultPool"].add(activity)
+        else:
+            if pool not in pool_tasks:
+                pool_tasks[pool] = set()
+            pool_tasks[pool].add(activity)
     return dict(pool_tasks)
-
 
 def __color_subgraph(
     graph: nx.DiGraph, start_node: str, end_node: str, coloring: Dict[str, str]
@@ -294,7 +295,7 @@ def identify_edges_id(root: etree._Element) -> List[str]:
     return [eid for eid in edge_ids if eid is not None]
 
 
-def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int, int]:
+def get_model_dimensions(root: etree._Element, padding: float = 30) -> List[int]:
     """
     Get the dimensions of the model.
     """
@@ -320,6 +321,7 @@ def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int
 
     max_right_edge = 0.0
     max_bottom_edge = 0.0
+    max_height = 0.0
 
     for bound in all_bounds:
         if not all(attr in bound.attrib for attr in ["x", "y", "width", "height"]):
@@ -329,10 +331,12 @@ def get_model_dimensions(root: etree._Element, padding: float = 30) -> Tuple[int
         y = float(bound.get("y"))
         width = float(bound.get("width"))
         height = float(bound.get("height"))
+        if height > max_height:
+            max_height = height
         max_right_edge = max(max_right_edge, x + width)
         max_bottom_edge = max(max_bottom_edge, y + height)
 
-    return int(max_right_edge + padding), int(max_bottom_edge + padding)
+    return [int(max_right_edge + padding), int(max_bottom_edge + padding), int(max_height)]
 
 
 def task_name_to_id(root: etree._Element) -> dict:
@@ -417,57 +421,67 @@ def __order_structures(
 
 
 def order_lanes_and_pools(
-    pool_data: Dict[str, str],
-    lane_data: Dict[str, str],
+    activity_to_pool_lane: Dict[str, Tuple[str, str]],
     task_name_to_id: Dict[str, str],
     root: etree._Element,
 ) -> List[str]:
     # First, we order the pools
-    pools_to_tasks = __pools_to_tasks(pool_data, lane_data)
+
+    pools_to_tasks = __pools_to_tasks(activity_to_pool_lane)
     ordered_pools = __order_structures(pools_to_tasks, task_name_to_id, root)
     # Then, we order the lanes per pool
     resulting_pool_lane_order = {}
     for pool in ordered_pools:
-        relevant_lanes = lane_data.keys() & pool_data[pool]
-        filtered_lanes = {
-            lane: lane_data[lane] for lane in relevant_lanes if lane in lane_data
-        }
-        ordered_lanes = __order_structures(filtered_lanes, task_name_to_id, root)
+        lane_data = defaultdict(list)
+        for activity, (p, lane) in activity_to_pool_lane.items():
+            if p == pool:
+                lane_data[lane].append(activity)
+        ordered_lanes = __order_structures(lane_data, task_name_to_id, root)
         resulting_pool_lane_order[pool] = ordered_lanes
+    print(f"Ordered pools and lanes: {resulting_pool_lane_order}")
     return resulting_pool_lane_order
 
 
 def construct_pools(
-    pool_data: Dict[str, List[str]],
-    lane_data: Dict[str, List[str]],
-    lane_width: int,
-    lane_height: int,
+    activity_to_pool_lane: Dict[str, Tuple[str, str]],
+    model_dimensions : List[int],
+    ordering: Dict[str, List[str]],
     padding=50,
     vertical_padding=30,
 ) -> List[Pool]:
     """
     This function takes the xml output and the pool data and constructs a list of Pool objects accordingly.
     """
+    print(f"Model dimensions: {model_dimensions}")
+    lane_width, lane_height, lane_padding = model_dimensions[0], model_dimensions[1], model_dimensions[2]
+    lane_height += lane_padding
     # get the pools from the xml output
     current_height = 0
     list_of_pools = []
     # get the pool data
+    pool_data = {activity : pool for activity, (pool, _) in activity_to_pool_lane.items()}
+    # Sort it according to the ordering
+    pool_data = {pool: pool_data for pool in ordering.keys()}
     for pool_name in pool_data.keys():
         # get the name of the pool
-        lanes = pool_data[pool_name]
-        lanes_filtered = {lane: lane_data[lane] for lane in lanes if lane in lane_data}
+        lane_data = {}
+        for activity, (p, lane) in activity_to_pool_lane.items():
+            if p == pool_name:
+                if lane not in lane_data:
+                    lane_data[lane] = []
+                lane_data[lane].append(activity)
         constructed_lanes = construct_lanes(
-            lanes_filtered, lane_width, lane_height, current_height
+            lane_data, lane_width, lane_height, current_height
         )
         # get the up left and down right coordinates of the pool
         up_left = (0, current_height)
         down_right = (
             lane_width + vertical_padding,
-            current_height + lane_height * len(lanes),
+            current_height + lane_height * len(lane_data),
         )
         # add the padding accordingly
         list_of_pools.append(Pool(up_left, down_right, pool_name, constructed_lanes))
-        current_height += lane_height * len(lanes) + padding
+        current_height += lane_height * len(lane_data) + padding
     return list_of_pools
 
 
@@ -497,6 +511,20 @@ def construct_lanes(
         lanes.append(Lane(up_left, down_right, name, activities))
     return lanes
 
+def __preprocess_start_event(root : etree._Element, element_id):
+    # We have to get rid of the     isInterrupting="false" attribute of the start event
+    ns = root.nsmap
+    BPMN_NS = ns.get("bpmn")
+    if not BPMN_NS:
+        raise Exception(
+            "BPMN namespace not found in the document. Cannot preprocess start event."
+        )
+    start_event_tag = f"{{{BPMN_NS}}}startEvent"
+    start_event = root.find(f".//{start_event_tag}[@id='{element_id}']")
+    if start_event is not None and "isInterrupting" in start_event.attrib:
+        del start_event.attrib["isInterrupting"]
+        print(f"Removed 'isInterrupting' attribute from start event '{element_id}'.")
+    return root
 
 def __edit_element_coordinates(
     root: etree._Element, element_id: str, coordinates: Tuple[float, float]
@@ -526,14 +554,17 @@ def __edit_element_coordinates(
         raise Exception(
             f"Element with id '{element_id}' not found in the XML. No changes made."
         )
+    if 'Start' in element_id:
+        root = __preprocess_start_event(root, element_id)
+
     return root
 
 
-def __get_y_coordinates_for_alignment(element_id: str, xml_output, lanes) -> float:
+def __get_y_coordinates_for_alignment(element_id: str, root: etree._Element, lanes) -> float:
     """
     This function retrieves the y-coordinate for aligning an element based on its neighbors.
     """
-    element_coordinates = __get_element_coordinates(xml_output, element_id)
+    element_coordinates = __get_element_coordinates(root, element_id)
     if not element_coordinates:
         return None
     # returns the middle y-coordinate of the element
@@ -668,6 +699,79 @@ def __check_for_path_intersection(
         return False
     return True
 
+def __construct_s_shaped_flow(
+        path_start: Tuple[float, float],
+        path_end: Tuple[float, float],
+        docking_pt_src: DockingDirection,
+        docking_pt_tgt: DockingDirection,
+) ->List[List[Tuple[float, float]]]:
+    pathways = []
+    flow_direction = path_start[0] - path_end[0], path_start[1] - path_end[1]
+    left = flow_direction[0] < 0
+    # a bit weird but the coordinate system starts at top left (0, 0)
+    down = flow_direction[1] < 0
+    if docking_pt_src == DockingDirection.LEFT and docking_pt_tgt == DockingDirection.RIGHT \
+        and not left:
+            # S-shaped curvature with vertical twist
+            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
+            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.RIGHT and docking_pt_tgt == DockingDirection.LEFT \
+        and left:
+            # S-shaped curvature with vertical twist
+            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
+            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.TOP and docking_pt_tgt == DockingDirection.BOTTOM \
+        and not down:
+            # S-shaped curvature with horizontal twist
+            aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
+            aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
+            pathways.append([aux_pt_1, aux_pt_2])
+    elif docking_pt_src == DockingDirection.BOTTOM and docking_pt_tgt == DockingDirection.TOP \
+        and down:
+            # S-shaped curvature with horizontal twist
+            aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
+            aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
+            pathways.append([aux_pt_1, aux_pt_2])
+    return pathways
+
+def __construct_c_shaped_flow(
+    path_start: Tuple[float, float],
+    path_end: Tuple[float, float],
+    docking_pt_src: DockingDirection,
+    docking_pt_tgt: DockingDirection,
+    offset,
+) -> List[Tuple[float, float]]:
+    pathways = []
+    variable_offset = [0, 5, 10, 15, 20, 25]
+    if docking_pt_src == docking_pt_tgt:
+        if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
+            # C-shaped curvature with vertical 
+            # We fix the x-coordinate for the vertical case
+            x_coord = min(path_start[0], path_end[0]) if docking_pt_src == DockingDirection.LEFT else max(path_start[0], path_end[0])
+            for var_offset in variable_offset:
+                aux_pt_1 = x_coord + offset + var_offset, path_start[1]
+                aux_pt_2 = x_coord + offset + var_offset, path_end[1]
+                pathways.append([aux_pt_1, aux_pt_2])
+                # Minus outset, too
+                aux_pt_1 = x_coord - offset - var_offset, path_start[1]
+                aux_pt_2 = x_coord - offset - var_offset, path_end[1]
+                pathways.append([aux_pt_1, aux_pt_2])
+        else:
+            # C-shaped curvature with horizontal twist
+            # We fix the y-coordinate for the horizontal case
+            y_coord = min(path_start[1], path_end[1]) if docking_pt_src == DockingDirection.BOTTOM else max(path_start[1], path_end[1])
+            for var_offset in variable_offset:
+                aux_pt_1 = path_start[0], y_coord + offset + var_offset
+                aux_pt_2 = path_end[0], y_coord + offset + var_offset
+                # Minus outset, too
+                pathways.append([aux_pt_1, aux_pt_2])
+                aux_pt_1 = path_start[0], y_coord - offset - var_offset
+                aux_pt_2 = path_end[0], y_coord - offset - var_offset
+                pathways.append([aux_pt_1, aux_pt_2])
+    return pathways
+
 
 def __construct_auxiliary_points(
     path_start: Tuple[float, float],
@@ -677,59 +781,26 @@ def __construct_auxiliary_points(
     offset,
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set_docking_pts = set([docking_pt_src, docking_pt_tgt])
-    # TO BE REWRITTEN
-    possible_aux_point_1, possible_aux_point_2 = [], []
+    pathways = []
+    pathways.extend(__construct_c_shaped_flow(
+        path_start, path_end, docking_pt_src, docking_pt_tgt, offset))
+    pathways.extend(__construct_s_shaped_flow(
+        path_start, path_end, docking_pt_src, docking_pt_tgt))
+
     if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
         # Base case, just return none twice
-        possible_aux_point_1.append(None)
-        possible_aux_point_2.append(None)
-    # Now, let's try S-shape
-    if set_docking_pts == {DockingDirection.LEFT, DockingDirection.RIGHT}:
-        # S-shaped curvature with vertical twist
-        aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1]
-        aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1]
-        possible_aux_point_1.append(aux_pt_1)
-        possible_aux_point_2.append(aux_pt_2)
-    elif set_docking_pts == {DockingDirection.TOP, DockingDirection.BOTTOM}:
-        # S-shaped curvature with horizontal twist
-        aux_pt_1 = path_start[0], (path_start[1] + path_end[1]) / 2
-        aux_pt_2 = path_end[0], (path_start[1] + path_end[1]) / 2
-        possible_aux_point_1.append(aux_pt_1)
-        possible_aux_point_2.append(aux_pt_2)
-    # A C-shape is only possible if the docking points are the same
-    elif docking_pt_src == docking_pt_tgt:
-        if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
-            # C-shaped curvature with vertical twist
-            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1] + offset
-            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1] + offset
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
-            # Minus outset, too
-            aux_pt_1 = (path_start[0] + path_end[0]) / 2, path_start[1] - offset
-            aux_pt_2 = (path_start[0] + path_end[0]) / 2, path_end[1] - offset
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
-        else:
-            # C-shaped curvature with horizontal twist
-            aux_pt_1 = path_start[0] + offset, (path_start[1] + path_end[1]) / 2
-            aux_pt_2 = path_end[0] + offset, (path_start[1] + path_end[1]) / 2
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
-            # Minus outset, too
-            aux_pt_1 = path_start[0] - offset, (path_start[1] + path_end[1]) / 2
-            aux_pt_2 = path_end[0] - offset, (path_start[1] + path_end[1]) / 2
-            possible_aux_point_1.append(aux_pt_1)
-            possible_aux_point_2.append(aux_pt_2)
+        pathways.append([None, None])
 
-    # We have two possibilities here, we add both
-    # 1. L-shaped with (x1, y2)
-    possible_aux_point_1.append((path_start[0], path_end[1]))
-    possible_aux_point_2.append(None)
-    # 2. L-shaped with (x2, y1)
-    possible_aux_point_1.append(None)
-    possible_aux_point_2.append((path_end[0], path_start[1]))
+    if docking_pt_src in {DockingDirection.BOTTOM, DockingDirection.TOP} and \
+          docking_pt_tgt in {DockingDirection.LEFT, DockingDirection.RIGHT}:
+        # 1. L-shaped with (x1, y2)
+        pathways.append([(path_start[0], path_end[1]), None])
+    if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT} and \
+            docking_pt_tgt in {DockingDirection.BOTTOM, DockingDirection.TOP}:
+        # 2. L-shaped with (x2, y1)
+        pathways.append([None, (path_end[0], path_start[1])])
 
-    return possible_aux_point_1, possible_aux_point_2
+    return pathways
 
 
 def __get_docking_point_name(
@@ -812,20 +883,20 @@ def __construct_possible_paths(
         and not shapely.equals(shape, target_shape)
     ]
     # Get target height for outset
-    offset = 1.5 * max(target_coords[3], source_coords[3])
+    randomness = random.randrange(3, 9)/10
+    offset = randomness * max(target_coords[3], source_coords[3])
     for src, target in paths:
         # Check if the path intersects with any of the shapes
         docking_pt_source = __get_docking_point_name(src, source_coords)
         docking_pt_target = __get_docking_point_name(target, target_coords)
-        auxiliary_point_1, auxiliary_point_2 = __construct_auxiliary_points(
+        pathways = __construct_auxiliary_points(
             src, target, docking_pt_source, docking_pt_target, offset
         )
-        for i in range(len(auxiliary_point_1)):
+        for i in range(len(pathways)):
             points_to_add = []
-            if auxiliary_point_1[i] is not None:
-                points_to_add.append(auxiliary_point_1[i])
-            if auxiliary_point_2[i] is not None:
-                points_to_add.append(auxiliary_point_2[i])
+            for point in pathways[i]:
+                if point is not None:
+                    points_to_add.append(point)
             constructed_path = [src, *points_to_add, target]
             multilane_path = __turn_points_into_multi_linestring(constructed_path)
             backup_path = constructed_path
@@ -887,12 +958,10 @@ def connect_points(
 
     return path
 
-
-def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
+def __identify_sequence_flows(root: etree._Element) -> List[str]:
     """
-    This function takes the xml output and the lanes and returns the xml output with the sequence flows
+    This function takes the xml output and returns the ids of the sequence flows
     """
-    # Get the sequence flows
     flows = []
     ns = root.nsmap
     if "bpmn" not in ns:
@@ -910,6 +979,15 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
     connections_dict = {
         seq_flow: (source, target) for seq_flow, source, target in flows
     }
+    return connections_dict
+
+
+def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
+    """
+    This function takes the xml output and the lanes and returns the xml output with the sequence flows
+    """
+    # Get the sequence flows
+    connections_dict = __identify_sequence_flows(root)
     # Get rid of previous sequence flows so we can add the new ones w/o any issues
     prev_paths = []
     message_flows = []
@@ -921,113 +999,233 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
             message_flows.append((seq_flow, source, target))
         # Should be embedded here though
         path = connect_points(src_coords, tgt_coords, shapes, prev_paths)
-        print(f"I have found a new path for {seq_flow}: {path}")
         prev_paths.append(path)
         root = __update_sequence_flow_positions(seq_flow, path, root)
     return root, message_flows
 
 
 def __align_tasks(
-    lanes: List[Lane], xml_output: str, task_dict: Dict[str, str]
+    lanes: List[Lane], root: str, task_dict: Dict[str, str]
 ) -> Tuple[str, List[str]]:
     aligned_elements = []
     for lane in lanes:
         # get the up left and down right coordinates of the lane
         up_left = lane.get_up_left()
         activities = lane.get_activities()
+        print(f"Aligning tasks in lane {lane.get_name()} with activities {activities}")
         for activity in activities:
             # get the id of the activity
+            print(f"Aligning activity {activity} in lane {lane.get_name()}")
             id_activity = task_dict[activity]
             aligned_elements.append(id_activity)
             lane.add_element(id_activity)
             # edit the coordinates of the task
-            task_coordinates = __get_element_coordinates(xml_output, id_activity)
+            task_coordinates = __get_element_coordinates(root, id_activity)
             new_coordinates = (task_coordinates[0], task_coordinates[1] + up_left[1])
-            xml_output = __edit_element_coordinates(
-                xml_output, id_activity, new_coordinates
+            root = __edit_element_coordinates(
+                root, id_activity, new_coordinates
             )
 
-    return xml_output, aligned_elements
+    return root, aligned_elements
 
+def __check_gateway_type(element_id: str, flows : Dict[str, Tuple[str, str]]) -> str:
+    """
+    This function checks if the gateway is diverging or converging
+    """
+    incoming, outgoing = 0, 0
+    for _, (source, target) in flows.items():
+        if source == element_id:
+            outgoing += 1
+        elif target == element_id:
+            incoming += 1
+    if incoming > outgoing:
+        return "converging"
+    elif outgoing > incoming:
+        return "diverging"
+    else:
+        return "mixed"
+    
 
 def __identify_nearest_aligned_element(
     element_id: str,
     aligned_pool_elements: List[str],
-    lanes: List[Lane],
-    xml_output: str,
+    seq_flows : Dict[str, Tuple[str, str]],
+    root: etree._Element,
 ) -> str:
     """
     This function identifies the nearest aligned element in the pool.
     """
-    min_x_distance = float("inf")
-    nearest_element = None
-    current_element_coordinates = __get_element_coordinates(xml_output, element_id)
-    for aligned_element in aligned_pool_elements:
-        element_coordinates = __get_element_coordinates(xml_output, aligned_element)
-        if element_coordinates is None:
-            continue
-        x_distance = abs(current_element_coordinates[0] - element_coordinates[0])
-        if x_distance < min_x_distance:
-            min_x_distance = x_distance
-            nearest_element = aligned_element
-    # Identify to which lane it belongs
+    predecessors, successors = [], []
+    for _, (source, target) in seq_flows.items():
+        if source == element_id and target in aligned_pool_elements:
+            successors.append(target)
+        elif target == element_id and source in aligned_pool_elements:
+            predecessors.append(source)
+    
+    # We will apply a heuristic here
+    if 'Gateway' in element_id:
+        # We have to check if it is diverging or converging
+        match_type = __check_gateway_type(element_id, seq_flows)
 
-    return nearest_element
+        match match_type:
+            case "converging":
+                if len(predecessors) > 0:
+                    return predecessors[0]
+            case "diverging":
+                if len(successors) > 0:
+                    return successors[0]
+            case _:
+                pass
 
+    
+    neighbors = predecessors + successors
+    if len(neighbors) > 0:
+        return neighbors[0]
+    else:
+        min_x_distance = float("inf")
+        nearest_element = None
+        current_element_coordinates = __get_element_coordinates(root, element_id)
+        for aligned_element in aligned_pool_elements:
+            element_coordinates = __get_element_coordinates(root, aligned_element)
+            if element_coordinates is None:
+                continue
+            x_distance = abs(current_element_coordinates[0] - element_coordinates[0])
+            if x_distance < min_x_distance:
+                min_x_distance = x_distance
+                nearest_element = aligned_element
+        # Identify to which lane it belongs
 
-def __align_elements(
-    xml_output: str,
+        return nearest_element
+
+def __align_gateways(
+    root : etree._Element,
     coloring: Dict[str, str],
     aligned_elements: List[str],
     lanes: List[Lane],
+    seq_flows : Dict[str, Tuple[str, str]],
 ) -> Tuple[str, List[str]]:
-    """ """
+    # This function aligns the gateways in the BPMN diagram.
+    prev_iteration = aligned_elements.copy()
+    element_lane_mapping = {}
+    i = 0
+    while set(prev_iteration) != set(aligned_elements) or i < 3:
+        prev_iteration = aligned_elements.copy()
+        for el_id, color in coloring.items():
+            if "Gateway" not in el_id:
+                continue
+            # Otherwise, we need to locate the nearest element within the same pool
+                
+            aligned_elements_within_pool = [
+                el for el in aligned_elements if coloring.get(el) == color \
+                and el != el_id
+            ]
+            if len(aligned_elements_within_pool) == 0:
+                continue
+            nearest_pool_element = __identify_nearest_aligned_element(
+                el_id, aligned_elements_within_pool, seq_flows, root
+            )
+            if nearest_pool_element is not None:
+                # Get the coordinates of the nearest element
+                nearest_coordinates = __get_element_coordinates(
+                    root, nearest_pool_element
+                )
+                # Get the lane of the nearest element
+                nearest_y, corresponding_lane = __get_y_coordinates_for_alignment(
+                    nearest_pool_element, root, lanes
+                )
+                current_element_coordinates = __get_element_coordinates(root, el_id)
+                try:
+                    y_coordinate = (
+                        current_element_coordinates[1] + corresponding_lane.get_up_left()[1]
+                    )
+                    if y_coordinate > corresponding_lane.get_down_right()[1] - 20 \
+                        or y_coordinate < corresponding_lane.get_up_left()[1] + 20:
+                        continue
+                except AttributeError:
+                    continue
+                
+                root = __edit_element_coordinates(
+                    root, el_id, (current_element_coordinates[0], y_coordinate)
+                )
+                element_lane_mapping[el_id] = corresponding_lane
+                if el_id not in aligned_elements:
+                    aligned_elements.append(el_id)
+        i += 1
+    for el_id, lane in element_lane_mapping.items():
+        lane.add_element(el_id)
+    return root
+
+def __align_events(
+    root: etree._Element,
+    coloring: Dict[str, str],
+    aligned_elements: List[str],
+    lanes: List[Lane],
+    seq_flows : Dict[str, Tuple[str, str]],
+    ) -> Tuple[str, List[str]]:
     for el_id, color in coloring.items():
         if el_id in aligned_elements:
             continue
         # Otherwise, we need to locate the nearest element within the same pool
+            
         aligned_elements_within_pool = [
-            el for el in aligned_elements if coloring.get(el) == color
+            el for el in aligned_elements if coloring.get(el) == color \
+            and el != el_id
         ]
-        print(aligned_elements_within_pool)
         nearest_pool_element = __identify_nearest_aligned_element(
-            el_id, aligned_elements_within_pool, lanes, xml_output
-        )
-        print(
-            f"Element {el_id} is not aligned, nearest element is {nearest_pool_element}\n"
-            f"Elements in the same pool are {aligned_elements_within_pool}\n"
-            f"Color is {color} and already aligned elements are {aligned_elements} with coloring {coloring}\n"
+            el_id, aligned_elements_within_pool, seq_flows, root
         )
         if nearest_pool_element is not None:
             # Get the coordinates of the nearest element
             nearest_coordinates = __get_element_coordinates(
-                xml_output, nearest_pool_element
+                root, nearest_pool_element
             )
             # Get the lane of the nearest element
             nearest_y, corresponding_lane = __get_y_coordinates_for_alignment(
-                nearest_pool_element, xml_output, lanes
+                nearest_pool_element, root, lanes
             )
-            current_element_coordinates = __get_element_coordinates(xml_output, el_id)
+            current_element_coordinates = __get_element_coordinates(root, el_id)
             y_coordinate = (
                 current_element_coordinates[1] + corresponding_lane.get_up_left()[1]
             )
-            xml_output = __edit_element_coordinates(
-                xml_output, el_id, (current_element_coordinates[0], y_coordinate)
+            root = __edit_element_coordinates(
+                root, el_id, (current_element_coordinates[0], y_coordinate)
             )
             print(
                 f"Nearest element {nearest_pool_element} has coordinates {nearest_coordinates} and y-coordinate {nearest_y}"
             )
             corresponding_lane.add_element(el_id)
-            aligned_elements.append(el_id)
-    return xml_output
+            if el_id not in aligned_elements:
+                aligned_elements.append(el_id)
+    return root
 
 
-def __create_shapes(elements, xml_output: str):
+
+def __align_elements(
+    root: etree._Element,
+    coloring: Dict[str, str],
+    aligned_elements: List[str],
+    lanes: List[Lane],
+) -> etree._Element:
+    # This is a simple heuristic to ensure that tasks are aligned first, then gateways, then events
+    # This ensures that the start and end events are connected to their respective predecessors/successors
+    # in a more natural way.
+    ordered_elements = sorted(
+        coloring.keys(),
+        key=lambda x: (0 if "Task" in x else (1 if "Gateway" in x else 2)),
+    )
+    seq_flows = __identify_sequence_flows(root)
+    coloring = {el: coloring[el] for el in ordered_elements}
+    root = __align_gateways(root, coloring, aligned_elements, lanes, seq_flows)
+    root = __align_events(root, coloring, aligned_elements, lanes, seq_flows)
+    return root
+
+
+def __create_shapes(elements, root: etree._Element):
     """This function takes the xml output and returns a list of shapely objects"""
     list_of_shapes = []
     for element in elements:
         # get the coordinates of the element
-        element_coordinates = __get_element_coordinates(xml_output, element)
+        element_coordinates = __get_element_coordinates(root, element)
         # create a shapely object
         shape = shapely.box(
             element_coordinates[0],
@@ -1118,11 +1316,11 @@ def __add_collaboration(
             lane_element = etree.SubElement(
                 laneset,
                 f"{{{BPMN_NS}}}lane",
-                attrib={"id": f"Lane_{hash(lane.get_name())}", "name": lane.get_name()},
+                attrib={"id": f"Lane_{hash(lane.get_name())}_{hash(pool.get_name())}", "name": lane.get_name()},
             )
             create_visual_shape(
                 plane,
-                f"Lane_{hash(lane.get_name())}",
+                f"Lane_{hash(lane.get_name())}_{hash(pool.get_name())}",
                 [lane.get_up_left(), lane.get_down_right()],
                 root,
             )
@@ -1159,7 +1357,6 @@ def __add_collaboration(
     for proc in new_processes:
         root.append(proc)
 
-    print(f"Creating message flows: {msg_flows}")
     for flow_id, source_id, target_id in msg_flows:
         etree.SubElement(
             collaboration,
@@ -1178,6 +1375,12 @@ def __add_collaboration(
 
     return root
 
+def build_lanes_only(
+        root : etree._Element, lanes : List[Lane]
+) -> str:
+    """
+    This function takes the xml output and the lanes and returns the xml output with the lanes.
+    """
 
 def build_pools_with_collaboration(
     root: etree._Element, pools: List[Pool], msg_flows: List[Tuple[str, str, str]]

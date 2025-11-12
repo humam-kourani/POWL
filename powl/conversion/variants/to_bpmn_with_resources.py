@@ -2,12 +2,34 @@ import powl.conversion.variants.to_bpmn as pminer_bpmn_transformer
 import powl.visualization.bpmn.resource_utils.layouter as utils
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 
-def apply(pool_data: dict, lane_data: dict, powl) -> str:
+def apply(activity_to_pool_lane : dict[str, tuple[str, str]], powl) -> str:
+    original_pools = set([p for _, (p, _) in activity_to_pool_lane.items() if p is not None])
+    activity_to_pool_lane_copy = activity_to_pool_lane.copy()
+    if len(original_pools) == 0:
+        # Modify it to have a default pool
+        activity_to_pool_lane = {
+            activity: ("ProcessPool", lane)
+            for activity, (_, lane) in activity_to_pool_lane.items()
+        }
+    for activity, (pool, lane) in activity_to_pool_lane_copy.items():
+        if pool is None and lane is None:
+            activity_to_pool_lane[activity] = ("ProcessPool", "DefaultLane")
+        elif pool is None:
+            activity_to_pool_lane[activity] = ("ProcessPool", lane)
+        elif lane is None:
+            activity_to_pool_lane[activity] = (pool, "DefaultLane")
+        
+    
 
-    pools = utils.__pools_to_tasks(pool_data, lane_data)
+    pools = utils.__pools_to_tasks(activity_to_pool_lane)
     _, G, _ = pminer_bpmn_transformer.apply(powl)
-    coloring = utils.color_graph(G, pools)
-    G, coloring = utils.__add_intermediate_events_to_graph(G, coloring)
+    coloring = {}
+    if len(pools) > 1:
+        coloring = utils.color_graph(G, pools)
+        G, coloring = utils.__add_intermediate_events_to_graph(G, coloring)
+    else:
+        pool_name = list(pools.keys())[0] if pools else "DefaultPool"
+        coloring = {node: pool_name for node in G.nodes()}
     bpmn, elements_mapping = pminer_bpmn_transformer.__transform_to_bpmn(G)
 
     # to string
@@ -25,15 +47,18 @@ def apply(pool_data: dict, lane_data: dict, powl) -> str:
     }
     task_name_to_id = utils.task_name_to_id(bpmn)
     ordered_lanes_and_pools = utils.order_lanes_and_pools(
-        pool_data, lane_data, task_name_to_id, bpmn
+        activity_to_pool_lane, task_name_to_id, bpmn
     )
+
     model_dims = utils.get_model_dimensions(bpmn)
     pools = utils.construct_pools(
-        ordered_lanes_and_pools, lane_data, model_dims[0], model_dims[1]
+        activity_to_pool_lane, model_dims, ordered_lanes_and_pools
     )
     lanes = [pool.get_lanes() for pool in pools]
     lanes = [lane for sublist in lanes for lane in sublist]  # Flatten
+    print(f"Constructed pools and lanes: {pools}, {lanes}")
     task_name_to_id = {k: v for k, v in task_name_to_id.items() if k != ""}
+    print(f"Task name to ID mapping: {task_name_to_id}")
     bpmn, aligned_elements = utils.__align_tasks(lanes, bpmn, task_name_to_id)
     bpmn = utils.__align_elements(bpmn, coloring, aligned_elements, lanes)
     shapes = utils.__create_shapes(aligned_elements, bpmn)
