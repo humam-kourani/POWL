@@ -81,6 +81,7 @@ def run_app():
                 )
 
                 st.session_state["model_gen"] = process_model
+                st.session_state["final_viz_str"] = None
             except Exception as e:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 st.error(body=f"Error during discovery: {e}", icon="⚠️")
@@ -94,7 +95,6 @@ def run_app():
         powl_model = st.session_state["model_gen"]
         bpmn, _, _ = bpmn_converter(powl_model)
         layouted_bpmn = bpmn_layouter.apply(bpmn)
-
         try:
             pn, im, fm = powl.convert_to_petri_net(powl_model)
 
@@ -124,21 +124,25 @@ def run_app():
             )
 
             image_format = str("svg").lower()
-            if view_option == ViewType.POWL.value:
-                from powl.visualization.powl import visualizer
+            if st.session_state["final_viz_str"] is None:
 
-                vis_str = visualizer.apply(powl_model)
+                if view_option == ViewType.POWL.value:
+                    from powl.visualization.powl import visualizer
 
-            elif view_option == ViewType.PETRI.value:
-                visualization = pn_visualizer.apply(
-                    pn, im, fm, parameters={"format": image_format}
-                )
-                vis_str = visualization.pipe(format="svg").decode("utf-8")
-            else:
+                    vis_str = visualizer.apply(powl_model)
+                    st.session_state["final_viz_str"] = vis_str
 
-                vis_str = bpmn_to_svg(get_xml_string(layouted_bpmn)).decode("utf-8")
+                elif view_option == ViewType.PETRI.value:
+                    visualization = pn_visualizer.apply(
+                        pn, im, fm, parameters={"format": image_format}
+                    )
+                    vis_str = visualization.pipe(format="svg").decode("utf-8")
+                    st.session_state["final_viz_str"] = vis_str
+                else:
+                    vis_str = bpmn_to_svg(get_xml_string(layouted_bpmn).decode("utf-8"))
+                    st.session_state["final_viz_str"] = vis_str
             with st.expander("View Image", expanded=True):
-                st.image(vis_str)
+                st.image(st.session_state["final_viz_str"])
 
         except Exception as e:
             st.error(icon="⚠️", body=str(e))

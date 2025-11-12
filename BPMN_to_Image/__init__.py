@@ -16,9 +16,10 @@ else:
     build_dir = os.path.join(parent_dir, "frontend/build")
     _component_func = components.declare_component(component_name, path=build_dir)
 
-def bpmn_to_svg(bpmn_xml: str, key=None) -> str:
+def bpmn_to_svg(bpmn_xml: str, key = "bpmn_to_svg") -> str:
     """
     An invisible component that converts a BPMN XML string to an SVG string.
     """
-    component_value = _component_func(xml=bpmn_xml, key=key, default=None)
+    component_value = _component_func(xml=bpmn_xml, key=key)
+    print(f"Component returned value of type: {type(component_value)}")
     return component_value

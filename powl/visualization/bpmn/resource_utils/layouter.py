@@ -71,22 +71,22 @@ def apply_layouting(content_diagram: str) -> str:
 
 
 def __pools_to_tasks(
-    pools: Dict[str, str], lane_data: Dict[str, str]
+    activity_to_pool_lane: Dict[str, Tuple[str, str]]
 ) -> Dict[str, set]:
     """
     Convert pools to tasks based on the lane data.
-
-    :param pools: A dictionary where keys are pool names and values are sets of node contents.
-    :param lanes: A dictionary where keys are lane names and values are lists of task names.
-    :return: A dictionary where keys are pool names and values are sets of task names.
     """
-    pool_tasks = defaultdict(list)
-    for pool, lanes in pools.items():
-        for lane in lanes:
-            tasks_to_lane = lane_data.get(lane, [])
-            pool_tasks[pool].extend(tasks_to_lane)
+    pool_tasks = defaultdict(set)
+    for activity, (pool, _) in activity_to_pool_lane.items():
+        if pool is None:
+            if "DefaultPool" not in pool_tasks:
+                pool_tasks["DefaultPool"] = set()
+            pool_tasks["DefaultPool"].add(activity)
+        else:
+            if pool not in pool_tasks:
+                pool_tasks[pool] = set()
+            pool_tasks[pool].add(activity)
     return dict(pool_tasks)
-
 
 def __color_subgraph(
     graph: nx.DiGraph, start_node: str, end_node: str, coloring: Dict[str, str]
@@ -421,30 +421,31 @@ def __order_structures(
 
 
 def order_lanes_and_pools(
-    pool_data: Dict[str, str],
-    lane_data: Dict[str, str],
+    activity_to_pool_lane: Dict[str, Tuple[str, str]],
     task_name_to_id: Dict[str, str],
     root: etree._Element,
 ) -> List[str]:
     # First, we order the pools
-    pools_to_tasks = __pools_to_tasks(pool_data, lane_data)
+
+    pools_to_tasks = __pools_to_tasks(activity_to_pool_lane)
     ordered_pools = __order_structures(pools_to_tasks, task_name_to_id, root)
     # Then, we order the lanes per pool
     resulting_pool_lane_order = {}
     for pool in ordered_pools:
-        relevant_lanes = lane_data.keys() & pool_data[pool]
-        filtered_lanes = {
-            lane: lane_data[lane] for lane in relevant_lanes if lane in lane_data
-        }
-        ordered_lanes = __order_structures(filtered_lanes, task_name_to_id, root)
+        lane_data = defaultdict(list)
+        for activity, (p, lane) in activity_to_pool_lane.items():
+            if p == pool:
+                lane_data[lane].append(activity)
+        ordered_lanes = __order_structures(lane_data, task_name_to_id, root)
         resulting_pool_lane_order[pool] = ordered_lanes
+    print(f"Ordered pools and lanes: {resulting_pool_lane_order}")
     return resulting_pool_lane_order
 
 
 def construct_pools(
-    pool_data: Dict[str, List[str]],
-    lane_data: Dict[str, List[str]],
+    activity_to_pool_lane: Dict[str, Tuple[str, str]],
     model_dimensions : List[int],
+    ordering: Dict[str, List[str]],
     padding=50,
     vertical_padding=30,
 ) -> List[Pool]:
@@ -458,22 +459,29 @@ def construct_pools(
     current_height = 0
     list_of_pools = []
     # get the pool data
+    pool_data = {activity : pool for activity, (pool, _) in activity_to_pool_lane.items()}
+    # Sort it according to the ordering
+    pool_data = {pool: pool_data for pool in ordering.keys()}
     for pool_name in pool_data.keys():
         # get the name of the pool
-        lanes = pool_data[pool_name]
-        lanes_filtered = {lane: lane_data[lane] for lane in lanes if lane in lane_data}
+        lane_data = {}
+        for activity, (p, lane) in activity_to_pool_lane.items():
+            if p == pool_name:
+                if lane not in lane_data:
+                    lane_data[lane] = []
+                lane_data[lane].append(activity)
         constructed_lanes = construct_lanes(
-            lanes_filtered, lane_width, lane_height, current_height
+            lane_data, lane_width, lane_height, current_height
         )
         # get the up left and down right coordinates of the pool
         up_left = (0, current_height)
         down_right = (
             lane_width + vertical_padding,
-            current_height + lane_height * len(lanes),
+            current_height + lane_height * len(lane_data),
         )
         # add the padding accordingly
         list_of_pools.append(Pool(up_left, down_right, pool_name, constructed_lanes))
-        current_height += lane_height * len(lanes) + padding
+        current_height += lane_height * len(lane_data) + padding
     return list_of_pools
 
 
@@ -774,10 +782,10 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set_docking_pts = set([docking_pt_src, docking_pt_tgt])
     pathways = []
-    pathways.extend(__construct_s_shaped_flow(
-        path_start, path_end, docking_pt_src, docking_pt_tgt))
     pathways.extend(__construct_c_shaped_flow(
         path_start, path_end, docking_pt_src, docking_pt_tgt, offset))
+    pathways.extend(__construct_s_shaped_flow(
+        path_start, path_end, docking_pt_src, docking_pt_tgt))
 
     if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
         # Base case, just return none twice
@@ -1004,8 +1012,10 @@ def __align_tasks(
         # get the up left and down right coordinates of the lane
         up_left = lane.get_up_left()
         activities = lane.get_activities()
+        print(f"Aligning tasks in lane {lane.get_name()} with activities {activities}")
         for activity in activities:
             # get the id of the activity
+            print(f"Aligning activity {activity} in lane {lane.get_name()}")
             id_activity = task_dict[activity]
             aligned_elements.append(id_activity)
             lane.add_element(id_activity)
@@ -1306,11 +1316,11 @@ def __add_collaboration(
             lane_element = etree.SubElement(
                 laneset,
                 f"{{{BPMN_NS}}}lane",
-                attrib={"id": f"Lane_{hash(lane.get_name())}", "name": lane.get_name()},
+                attrib={"id": f"Lane_{hash(lane.get_name())}_{hash(pool.get_name())}", "name": lane.get_name()},
             )
             create_visual_shape(
                 plane,
-                f"Lane_{hash(lane.get_name())}",
+                f"Lane_{hash(lane.get_name())}_{hash(pool.get_name())}",
                 [lane.get_up_left(), lane.get_down_right()],
                 root,
             )
@@ -1365,6 +1375,12 @@ def __add_collaboration(
 
     return root
 
+def build_lanes_only(
+        root : etree._Element, lanes : List[Lane]
+) -> str:
+    """
+    This function takes the xml output and the lanes and returns the xml output with the lanes.
+    """
 
 def build_pools_with_collaboration(
     root: etree._Element, pools: List[Pool], msg_flows: List[Tuple[str, str, str]]
