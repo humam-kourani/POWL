@@ -141,3 +141,5 @@ dmypy.json
 # BPMN models
 *.bpmn
 examples/*.svg
+# Node modules
+node_modules

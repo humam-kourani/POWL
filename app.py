@@ -15,6 +15,7 @@ from pm4py.util import constants
 from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
+from BPMN_to_Image import bpmn_to_svg
 
 class ViewType(Enum):
     BPMN = "BPMN"
@@ -135,10 +136,7 @@ def run_app():
                 vis_str = visualization.pipe(format="svg").decode("utf-8")
             else:
 
-                visualization = bpmn_visualizer.apply(
-                    layouted_bpmn, parameters={"format": image_format}
-                )
-                vis_str = visualization.pipe(format="svg").decode("utf-8")
+                vis_str = bpmn_to_svg(get_xml_string(layouted_bpmn)).decode("utf-8")
             with st.expander("View Image", expanded=True):
                 st.image(vis_str)
 
