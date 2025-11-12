@@ -25,12 +25,11 @@ To run the Streamlit application on your own machine:
 
 Alternatively, you can install it using the provided Docker image:
 
-1. Clone this repository.
-2. Build the Docker image:
+1. Pull the Docker image:
      ```bash
-     docker build -t powl .
+     docker pull ghcr.io/humam-kourani/powl:latest
      ```
-3. Run the app:
+2. Run the app:
      ```bash
      docker run -p 8501:8501 powl
      ```
