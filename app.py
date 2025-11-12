@@ -133,8 +133,6 @@ def run_app():
                                                     parameters={'format': image_format})
                 vis_str = visualization.pipe(format='svg').decode('utf-8')
             else:  # BPMN
-                from pm4py.objects.bpmn.layout import layouter
-                layouted_bpmn = layouter.apply(bpmn)
                 visualization = bpmn_visualizer.apply(layouted_bpmn,
                                                       parameters={'format': image_format})
                 vis_str = visualization.pipe(format='svg').decode('utf-8')
