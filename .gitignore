@@ -143,3 +143,6 @@ dmypy.json
 examples/*.svg
 # Node modules
 node_modules
+
+# UV lock file
+uv.lock
