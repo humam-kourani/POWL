@@ -146,3 +146,6 @@ node_modules
 
 # UV lock file
 uv.lock
+
+# devcontainer configuration
+.devcontainer/
