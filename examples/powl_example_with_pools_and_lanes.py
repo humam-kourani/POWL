@@ -1,3 +1,5 @@
+import os
+
 import powl
 from powl.objects.obj import Transition, DecisionGraph, BinaryRelation
 from powl.conversion.variants.to_bpmn_with_resources import apply as to_bpmn_with_resources
@@ -37,7 +39,9 @@ def generate_process_2():
 
     bpmn_model = to_bpmn_with_resources(activity_to_pool_lane, model)
     # export it as .bpmn
-    with open(r"./examples/powl_bpmn.bpmn", "w") as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    bpmn_path = os.path.join(current_dir, "powl_bpmn.bpmn")
+    with open(bpmn_path, "w") as f:
         f.write(bpmn_model)
 
 

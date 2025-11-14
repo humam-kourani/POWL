@@ -1,11 +1,14 @@
 import pm4py
 import powl
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
+import os
 
 def execute_script():
 
     # Read event log (csv, xes, or xes.gz)
-    log  = powl.import_event_log(r"./examples/running-example.csv")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(current_dir, "running-example.csv")
+    log  = powl.import_event_log(path)
 
     # Discover POWL 2.0 model
     model = powl.discover(log, dfg_frequency_filtering_threshold=0.0, variant=POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC)
@@ -14,7 +17,8 @@ def execute_script():
     powl.view(model)
 
     # Export visualization
-    powl.save_visualization(model, file_path=r"./examples/powl_vis.svg")
+    image_path = os.path.join(current_dir, "powl_vis.svg")
+    powl.save_visualization(model, file_path=image_path)
 
     # Convert into a PM4Py Petri net
     petri_net, initial_marking, final_marking = powl.convert_to_petri_net(model)
