@@ -212,6 +212,17 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
             viz.node(this_node_id, label="", shape="diamond", color="navy",
                      width='0.6', height='0.6', fixedsize="true", image=xor_image)
     elif isinstance(powl, DecisionGraph):
+        if len(powl.children) == 1:
+            child = powl.children[0]
+            if isinstance(child, StrictPartialOrder) or isinstance(child, DecisionGraph) or isinstance(child,
+                                                                                                       OperatorPOWL):
+                if powl.order.is_edge(powl.start, powl.end):
+                    skip_order = True
+                if powl.order.is_edge(child, child):
+                    loop_order = True
+
+                return repr_powl(child, viz, color_map, level=level, skip_order=skip_order, loop_order=loop_order)
+
         block_id = get_block_id(powl)
         child_id_map = {}
         with viz.subgraph(name=block_id) as block:
