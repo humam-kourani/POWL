@@ -3,10 +3,10 @@ from powl.discovery.partial_order_based.utils.simplified_objects import Graph
 
 def combine_orders(orders):
     nodes = sorted({x for g in orders for x in g.nodes})
-    idx   = {x:i for i,x in enumerate(nodes)}
-    n     = len(nodes)
+    idx = {x: i for i, x in enumerate(nodes)}
+    n = len(nodes)
 
-    edges_bits     = [0] * n
+    edges_bits = [0] * n
     conflicts_bits = [0] * n
     for g in orders:
         for u in g.nodes:
@@ -14,11 +14,11 @@ def combine_orders(orders):
             for v in g.nodes:
                 vi = idx[v]
                 if u == v:
-                    conflicts_bits[ui] |= (1 << vi)
+                    conflicts_bits[ui] |= 1 << vi
                 if (u, v) in g.edges:
-                    edges_bits[ui] |= (1 << vi)
+                    edges_bits[ui] |= 1 << vi
                 else:
-                    conflicts_bits[ui] |= (1 << vi)
+                    conflicts_bits[ui] |= 1 << vi
 
     for i in range(n):
         edges_bits[i] &= ~conflicts_bits[i]
@@ -41,8 +41,8 @@ def combine_orders(orders):
         b = edges_bits[i]
         while b:
             lb = b & -b
-            j  = lb.bit_length() - 1
-            rev_bits[j] |= (1 << i)
+            j = lb.bit_length() - 1
+            rev_bits[j] |= 1 << i
             b &= ~lb
 
     # for each conflict (i→k), remove every j→k where i→j
@@ -50,14 +50,14 @@ def combine_orders(orders):
         cb = conflicts_bits[i]
         while cb:
             lb = cb & -cb
-            k  = lb.bit_length() - 1
+            k = lb.bit_length() - 1
             mids = edges_bits[i] & rev_bits[k]
             while mids:
                 mlb = mids & -mids
-                j   = mlb.bit_length() - 1
+                j = mlb.bit_length() - 1
                 edges_bits[j] &= ~(1 << k)
-                rev_bits[k]   &= ~(1 << j)
-                mids         &= ~mlb
+                rev_bits[k] &= ~(1 << j)
+                mids &= ~mlb
             cb &= ~lb
 
     final = {

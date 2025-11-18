@@ -14,6 +14,7 @@ from powl.objects.obj import (
     Transition,
 )
 
+
 def __handle_transition(powl_content: Transition) -> nx.DiGraph:
     # Add artificial start and end nodes
     subgraph = nx.DiGraph()
@@ -93,9 +94,7 @@ def __handle_operator_powl(powl_content: OperatorPOWL) -> nx.DiGraph:
     elif operator == Operator.XOR:
         # One exclusive choice gateway
         exclusive_gateway_diverging = f"ExclusiveGateway_{id(powl_content)}_diverging"
-        exclusive_gateway_converging = (
-            f"ExclusiveGateway_{id(powl_content)}_converging"
-        )
+        exclusive_gateway_converging = f"ExclusiveGateway_{id(powl_content)}_converging"
         G.add_edge(start_event, exclusive_gateway_diverging)
         G.add_edge(exclusive_gateway_converging, end_event)
 
@@ -155,7 +154,7 @@ def __handle_decision_graph(powl_content: DecisionGraph) -> nx.DiGraph:
             )
             # Connect them
             G.add_edge(f"ExclusiveGateway_{id(node)}_beforenode", id(node))
-        
+
     G = __add_auxiliary_nodes_before_after(G, node_edges, type="exclusive_gateway")
     for edge in edges:
         src, dst = edge
@@ -312,7 +311,7 @@ def __generate_submodel(powl_content) -> nx.DiGraph:
         StrictPartialOrder: __handle_StrictPartialOrder,
         DecisionGraph: __handle_decision_graph,
     }
- 
+
     if type(powl_content) in handler_map:
         try:
             handler = handler_map[type(powl_content)]
@@ -457,6 +456,7 @@ def expand_model(powl, G: nx.DiGraph):
         G = expand_model(content, G)
     return G
 
+
 def __update_paired_with_relation(G: nx.DiGraph, gateway_to_remove, successor):
     """
     Update the paired_with relation for gateways in the graph.
@@ -476,7 +476,7 @@ def __update_paired_with_relation(G: nx.DiGraph, gateway_to_remove, successor):
         if isinstance(paired_with, list):
             for paired_gateway in paired_with:
                 # find the paired gateway in the graph and update its list
-                if 'Gateway' not in str(paired_gateway):
+                if "Gateway" not in str(paired_gateway):
                     # We only want to update gateways, not tasks
                     continue
                 paired_node = G.nodes.get(paired_gateway, None)
@@ -487,7 +487,10 @@ def __update_paired_with_relation(G: nx.DiGraph, gateway_to_remove, successor):
                             paired_node["paired_with"].append(successor)
                         else:
                             # If it is not a list, convert it to a list
-                            paired_node["paired_with"] = [paired_node["paired_with"], successor]
+                            paired_node["paired_with"] = [
+                                paired_node["paired_with"],
+                                successor,
+                            ]
                     else:
                         # If it does not have a paired_with attribute, create it
                         paired_node["paired_with"] = [successor]
@@ -500,11 +503,13 @@ def __update_paired_with_relation(G: nx.DiGraph, gateway_to_remove, successor):
                             G.nodes[successor]["paired_with"].append(paired_gateway)
                         else:
                             G.nodes[successor]["paired_with"] = [
-                                G.nodes[successor]["paired_with"], paired_gateway
+                                G.nodes[successor]["paired_with"],
+                                paired_gateway,
                             ]
                     else:
                         G.nodes[successor]["paired_with"] = [paired_gateway]
     return G
+
 
 def __postprocess_graph(G: nx.DiGraph) -> nx.DiGraph:
     G_copy = G.copy()
@@ -531,8 +536,10 @@ def __postprocess_graph(G: nx.DiGraph) -> nx.DiGraph:
         G = G_copy.copy()
     return G_copy
 
+
 def __print_powl(powl):
     print(powl)
+
 
 def apply(powl):
     """
@@ -568,6 +575,7 @@ def apply(powl):
     except Exception as e:
         raise ValueError(f"Error transforming graph to BPMN: {e}")
     return bpmn, resulting_graph, original_element_id_to_id
+
 
 def __transform_to_bpmn(G):
     """
@@ -605,17 +613,21 @@ def __transform_to_bpmn(G):
 
             if "Catch" in str(node):
                 ided_id = f"IntermediateCatchEvent_{ided_id}"
-                object = bpmn.IntermediateCatchEvent(id=ided_id, name=str(attrs.get("content", "")))
+                object = bpmn.IntermediateCatchEvent(
+                    id=ided_id, name=str(attrs.get("content", ""))
+                )
 
             elif "Throw" in str(node):
                 ided_id = f"IntermediateThrowEvent_{ided_id}"
-                object = bpmn.IntermediateThrowEvent(id=ided_id, name=str(attrs.get("content", "")))
+                object = bpmn.IntermediateThrowEvent(
+                    id=ided_id, name=str(attrs.get("content", ""))
+                )
         else:
             # tasks
             ided_id = f"Task_{ided_id}"
             object = bpmn.Task(id=ided_id, name=str(attrs.get("content", "")))
         original_element_id_to_id[str(node)] = ided_id
-            
+
         node_object_mapping[node] = object
         for incoming in node_dict[node]["incoming"]:
             if incoming not in node_object_mapping:
@@ -638,5 +650,4 @@ def __transform_to_bpmn(G):
             object.add_out_arc(seq_flow)
         bpmn.add_node(object)
 
-
-    return bpmn, original_element_id_to_id    
+    return bpmn, original_element_id_to_id

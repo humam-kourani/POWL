@@ -1,12 +1,28 @@
 from powl.discovery.partial_order_based.utils.combine_order import combine_orders
-from powl.discovery.partial_order_based.utils.simplified_objects import Skip, Graph, LOOP, XOR, ActivityInstance, \
-    generate_powl, SelfLoop, get_leaves
-from powl.discovery.partial_order_based.variants.base.utils.constants import ENABLE_LOOP_DETECTION, \
-    ENABLE_XOR_DETECTION
-from powl.discovery.partial_order_based.variants.base.utils.mapping import apply_node_mapping_on_single_graph, \
-    find_self_loops
-from powl.discovery.partial_order_based.variants.base.utils.node_grouping import NodeGrouping
-from powl.discovery.partial_order_based.variants.base.utils.xor_detection import XORMiner
+from powl.discovery.partial_order_based.utils.simplified_objects import (
+    ActivityInstance,
+    generate_powl,
+    get_leaves,
+    Graph,
+    LOOP,
+    SelfLoop,
+    Skip,
+    XOR,
+)
+from powl.discovery.partial_order_based.variants.base.utils.constants import (
+    ENABLE_LOOP_DETECTION,
+    ENABLE_XOR_DETECTION,
+)
+from powl.discovery.partial_order_based.variants.base.utils.mapping import (
+    apply_node_mapping_on_single_graph,
+    find_self_loops,
+)
+from powl.discovery.partial_order_based.variants.base.utils.node_grouping import (
+    NodeGrouping,
+)
+from powl.discovery.partial_order_based.variants.base.utils.xor_detection import (
+    XORMiner,
+)
 
 
 def apply_mining_algorithm_recursively(node):
@@ -25,10 +41,12 @@ def apply_mining_algorithm_recursively(node):
         redo = apply_mining_algorithm_recursively(node.redo)
         return LOOP(body, redo)
     elif isinstance(node, XOR):
-        new_children = {apply_mining_algorithm_recursively(child) for child in node.children}
+        new_children = {
+            apply_mining_algorithm_recursively(child) for child in node.children
+        }
         return XOR(frozenset(new_children))
     else:
-        raise TypeError('Unsupported node type')
+        raise TypeError("Unsupported node type")
 
 
 def _mine(orders):
@@ -61,7 +79,9 @@ def _mine(orders):
 
                 sub_models = []
                 for group in cluster:
-                    projected_log = XORMiner.project_partial_orders_on_groups(orders, list(group))
+                    projected_log = XORMiner.project_partial_orders_on_groups(
+                        orders, list(group)
+                    )
                     sub_models.append(_mine(projected_log))
                 model = XOR(children=frozenset(sub_models))
                 for group in cluster:
@@ -71,7 +91,6 @@ def _mine(orders):
                         label_mapping[activity_label] = model
 
             orders = XORMiner.apply_mapping(orders, label_mapping)
-
 
     mapping_skips, new_nodes_counter = NodeGrouping.find_groups(orders)
     if ENABLE_LOOP_DETECTION:
@@ -84,7 +103,6 @@ def _mine(orders):
         order = orders[0]
     else:
         order = combine_orders(orders)
-
 
     if len(order.nodes) == 0:
         return ActivityInstance(None, 1)

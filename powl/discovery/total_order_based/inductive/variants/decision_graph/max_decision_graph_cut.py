@@ -1,17 +1,22 @@
 from abc import ABC
 from collections import Counter
 from itertools import combinations, product
-from typing import Optional, List, Any, Generic, Dict, Collection, Tuple
+from typing import Any, Collection, Dict, Generic, List, Optional, Tuple
+
+from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
+from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
 from pm4py.objects.dfg import util as dfu
-from pm4py.algo.discovery.inductive.cuts import utils as cut_util
+from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.process_tree.obj import Operator
+
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import DecisionGraph, POWL
-from pm4py.objects.process_tree.obj import Operator
-from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
-from pm4py.objects.dfg.obj import DFG
 
 
 class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
@@ -20,7 +25,9 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         return None
 
     @classmethod
-    def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[List[Any]]:
+    def holds(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[List[Any]]:
 
         alphabet = parameters["alphabet"]
         transitive_successors = parameters["transitive_successors"]
@@ -64,8 +71,9 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         return groups
 
     @classmethod
-    def apply(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[Tuple[DecisionGraph,
-    List[POWL]]]:
+    def apply(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[DecisionGraph, List[POWL]]]:
 
         dfg = obj.dfg
         alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
@@ -73,11 +81,17 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         start_activities = set(obj.dfg.start_activities.keys())
         end_activities = set(obj.dfg.end_activities.keys())
 
-        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(dfg)
+        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(
+            dfg
+        )
 
         def keep(a):
-            ok_start = (a in start_activities) or (len(set(transitive_predecessors[a]) & start_activities) > 0)
-            ok_end = (a in end_activities) or (len(set(transitive_successors[a]) & end_activities) > 0)
+            ok_start = (a in start_activities) or (
+                len(set(transitive_predecessors[a]) & start_activities) > 0
+            )
+            ok_end = (a in end_activities) or (
+                len(set(transitive_successors[a]) & end_activities) > 0
+            )
             return ok_start and ok_end
 
         alphabet = [a for a in alphabet if keep(a)]
@@ -98,9 +112,6 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
                     if any((a, b) in dfg.graph for (a, b) in pairs):
                         order.add_edge(children[i], children[j])
 
-
-
-
         start_nodes = []
         end_nodes = []
         for i in range(len(groups)):
@@ -116,9 +127,12 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
 
 class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], ABC):
     @classmethod
-    def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[
-        IMDataStructureUVCL]:
+    def project(
+        cls,
+        obj: IMDataStructureUVCL,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureUVCL]:
 
         logs = [Counter() for _ in groups]
 
@@ -133,8 +147,12 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
 
 class MaximalDecisionGraphCutDFG(MaximalDecisionGraphCut[IMDataStructureDFG], ABC):
     @classmethod
-    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+    def project(
+        cls,
+        obj: IMDataStructureDFG,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureDFG]:
 
         base_dfg = obj.dfg
         dfg_map = {group: DFG() for group in groups}

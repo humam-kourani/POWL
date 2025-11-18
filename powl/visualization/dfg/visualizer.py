@@ -1,11 +1,12 @@
-from pm4py.visualization.common import gview
-from pm4py.visualization.common import save as gsave
-from powl.visualization.dfg.variants import base
-from enum import Enum
-from pm4py.util import exec_utils
 from copy import deepcopy
-from pm4py.objects.dfg.obj import DFG
+from enum import Enum
+
 import graphviz
+from pm4py.objects.dfg.obj import DFG
+from pm4py.util import exec_utils
+from pm4py.visualization.common import gview, save as gsave
+
+from powl.visualization.dfg.variants import base
 
 
 class Variants(Enum):

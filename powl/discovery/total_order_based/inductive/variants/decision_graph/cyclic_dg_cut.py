@@ -1,19 +1,23 @@
-from powl.discovery.total_order_based.inductive.variants.decision_graph.max_decision_graph_cut import \
-    MaximalDecisionGraphCut
 from abc import ABC
 from collections import Counter
 from itertools import combinations
-from typing import Optional, List, Any, Dict, Collection
+from typing import Any, Collection, Dict, List, Optional
+
+from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 
 from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
-from pm4py.algo.discovery.inductive.cuts import utils as cut_util
+
+from powl.discovery.total_order_based.inductive.variants.decision_graph.max_decision_graph_cut import (
+    MaximalDecisionGraphCut,
+)
 
 
 class CyclicDecisionGraphCut(MaximalDecisionGraphCut[T], ABC):
-
     @classmethod
-    def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[List[Any]]:
+    def holds(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[List[Any]]:
 
         alphabet = parameters["alphabet"]
         dfg = obj.dfg
@@ -29,11 +33,15 @@ class CyclicDecisionGraphCut(MaximalDecisionGraphCut[T], ABC):
 
         return groups
 
+
 class CyclicDecisionGraphCutUVCL(CyclicDecisionGraphCut[IMDataStructureUVCL], ABC):
     @classmethod
-    def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[
-        IMDataStructureUVCL]:
+    def project(
+        cls,
+        obj: IMDataStructureUVCL,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureUVCL]:
 
         logs = [Counter() for _ in groups]
 

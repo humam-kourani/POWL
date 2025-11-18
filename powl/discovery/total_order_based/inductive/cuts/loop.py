@@ -1,17 +1,20 @@
 from abc import ABC
 from collections.abc import Collection
-from typing import Optional, Any, Dict, Generic, List
+from typing import Any, Dict, Generic, List, Optional
 
-from pm4py.algo.discovery.inductive.cuts.loop import LoopCut, LoopCutUVCL, T, LoopCutDFG
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
-from powl.objects.obj import OperatorPOWL
-from pm4py.objects.process_tree.obj import Operator
+from pm4py.algo.discovery.inductive.cuts.loop import LoopCut, LoopCutDFG, LoopCutUVCL, T
 from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
 from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.process_tree.obj import Operator
+
+from powl.objects.obj import OperatorPOWL
 
 
 class POWLLoopCut(LoopCut, ABC, Generic[T]):
-
     @classmethod
     def operator(cls, parameters: Optional[Dict[str, Any]] = None) -> OperatorPOWL:
         return OperatorPOWL(Operator.LOOP, [])
@@ -20,10 +23,11 @@ class POWLLoopCut(LoopCut, ABC, Generic[T]):
 class POWLLoopCutUVCL(LoopCutUVCL, POWLLoopCut[IMDataStructureUVCL]):
     pass
 
+
 class POWLLoopCutDFG(LoopCutDFG, POWLLoopCut[IMDataStructureDFG]):
     @classmethod
     def holds(
-            cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Optional[List[Collection[Any]]]:
         """
         This method finds a loop cut in the dfg.
@@ -46,7 +50,7 @@ class POWLLoopCutDFG(LoopCutDFG, POWLLoopCut[IMDataStructureDFG]):
 
         groups = [start_activities.union(end_activities)]
         for c in cls._compute_connected_components(
-                dfg, start_activities, end_activities
+            dfg, start_activities, end_activities
         ):
             groups.append(set(c.nodes))
 
@@ -70,10 +74,13 @@ class POWLLoopCutDFG(LoopCutDFG, POWLLoopCut[IMDataStructureDFG]):
 
         return groups
 
-
     @classmethod
-    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+    def project(
+        cls,
+        obj: IMDataStructureDFG,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureDFG]:
         dfg = obj.dfg
 
         skippable = [False for i in range(len(groups))]
@@ -105,7 +112,7 @@ class POWLLoopCutDFG(LoopCutDFG, POWLLoopCut[IMDataStructureDFG]):
                 dfgs[0].graph[(a, b)] = dfg.graph[(a, b)]
                 # No need for this: if we have a case where the do part is followed by another execution of the do part, then we won't be able to split the execution during projection, and therefore, there this will be modeled as a self-loop in the do part
                 # if a in dfg.end_activities and b in dfg.start_activities:
-                    # skippable[1] = True
+                # skippable[1] = True
             elif i > 0 and j > 0:
                 if i == j:
                     dfgs[i].graph[(a, b)] = dfg.graph[(a, b)]
@@ -117,5 +124,7 @@ class POWLLoopCutDFG(LoopCutDFG, POWLLoopCut[IMDataStructureDFG]):
             else:
                 raise Exception("We should never reach here!")
 
-
-        return [IMDataStructureDFG(InductiveDFG(dfg=dfgs[i], skip=skippable[i])) for i in range(len(dfgs))]
+        return [
+            IMDataStructureDFG(InductiveDFG(dfg=dfgs[i], skip=skippable[i]))
+            for i in range(len(dfgs))
+        ]

@@ -16,6 +16,7 @@ from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl.conversion.variants.to_bpmn import apply as bpmn_converter
 
+
 class ViewType(Enum):
     BPMN = "BPMN"
     POWL = "POWL"
@@ -99,8 +100,9 @@ def run_app():
 
             download_1, download_2 = st.columns(2)
             with download_1:
-                bpmn_data =  get_xml_string(layouted_bpmn,
-                                parameters={"encoding": constants.DEFAULT_ENCODING})
+                bpmn_data = get_xml_string(
+                    layouted_bpmn, parameters={"encoding": constants.DEFAULT_ENCODING}
+                )
 
                 st.download_button(
                     label="Download BPMN",
@@ -126,20 +128,22 @@ def run_app():
 
             if view_option == ViewType.POWL.value:
                 from powl.visualization.powl import visualizer
+
                 vis_str = visualizer.apply(powl_model)
 
             elif view_option == ViewType.PETRI.value:
-                visualization = pn_visualizer.apply(pn, im, fm,
-                                                    parameters={'format': image_format})
-                vis_str = visualization.pipe(format='svg').decode('utf-8')
+                visualization = pn_visualizer.apply(
+                    pn, im, fm, parameters={"format": image_format}
+                )
+                vis_str = visualization.pipe(format="svg").decode("utf-8")
             else:  # BPMN
-                visualization = bpmn_visualizer.apply(layouted_bpmn,
-                                                      parameters={'format': image_format})
-                vis_str = visualization.pipe(format='svg').decode('utf-8')
+                visualization = bpmn_visualizer.apply(
+                    layouted_bpmn, parameters={"format": image_format}
+                )
+                vis_str = visualization.pipe(format="svg").decode("utf-8")
 
             with st.expander("View Image", expanded=True):
                 st.image(vis_str)
-
 
         except Exception as e:
             st.error(icon="⚠️", body=str(e))

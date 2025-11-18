@@ -1,30 +1,46 @@
-from typing import List, Optional, Dict, Any, Tuple
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructure, IMDataStructureUVCL, IMDataStructureDFG
-from powl.discovery.total_order_based.inductive.cuts.concurrency import POWLConcurrencyCutUVCL, POWLConcurrencyCutDFG
-from powl.discovery.total_order_based.inductive.cuts.factory import S, T, CutFactory
-from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL, POWLLoopCutDFG
-from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut import CyclicDecisionGraphCutUVCL
-from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import \
-    MaximalPartialOrderCutUVCL
-from powl.objects.obj import POWL
+from typing import Any, Dict, List, Optional, Tuple
+
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructure,
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
 from pm4py.objects.dfg import util as dfu
+
+from powl.discovery.total_order_based.inductive.cuts.concurrency import (
+    POWLConcurrencyCutUVCL,
+)
+from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory, T
+from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL
+from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut import (
+    CyclicDecisionGraphCutUVCL,
+)
+from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import (
+    MaximalPartialOrderCutUVCL,
+)
+from powl.objects.obj import POWL
 
 
 class CutFactoryCyclicDecisionGraph(CutFactory):
-
     @classmethod
     def get_cuts(cls, obj, parameters=None):
 
         if type(obj) is IMDataStructureUVCL:
-            return [CyclicDecisionGraphCutUVCL, POWLConcurrencyCutUVCL, MaximalPartialOrderCutUVCL, POWLLoopCutUVCL]
+            return [
+                CyclicDecisionGraphCutUVCL,
+                POWLConcurrencyCutUVCL,
+                MaximalPartialOrderCutUVCL,
+                POWLLoopCutUVCL,
+            ]
         elif type(obj) is IMDataStructureDFG:
             return NotImplementedError
         else:
             return []
 
     @classmethod
-    def find_cut(cls, obj: IMDataStructure, parameters: Optional[Dict[str, Any]] = None) -> Optional[
-        Tuple[POWL, List[T]]]:
+    def find_cut(
+        cls, obj: IMDataStructure, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[POWL, List[T]]]:
         alphabet = sorted(dfu.get_vertices(obj.dfg), key=lambda g: g.__str__())
         if len(alphabet) < 2:
             return None

@@ -1,17 +1,23 @@
-from collections import Counter
-from itertools import product
 from abc import ABC
-from itertools import combinations
-from typing import Any, Optional, Dict, List, Generic, Tuple, Collection
+from collections import Counter
+from itertools import combinations, product
+from typing import Any, Collection, Dict, Generic, List, Optional, Tuple
+
+from pm4py.algo.discovery.inductive.cuts import utils as cut_util
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
-from powl.objects.BinaryRelation import BinaryRelation
-from powl.objects.obj import StrictPartialOrder, POWL
-from pm4py.algo.discovery.inductive.cuts import utils as cut_util
-from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import \
-    project_on_groups_with_unique_activities, MaximalPartialOrderCutDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
 from pm4py.objects.dfg import util as dfu
+
+from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import (
+    MaximalPartialOrderCutDFG,
+    project_on_groups_with_unique_activities,
+)
+from powl.objects.BinaryRelation import BinaryRelation
+from powl.objects.obj import POWL, StrictPartialOrder
 
 from powl.objects.utils.relation import get_transitive_closure_from_counter
 
@@ -38,11 +44,17 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
         for j in range(i + 1, len(po.nodes)):
             cluster_2 = po.nodes[j]
 
-            sum_freq = efg_freq[(cluster_1, cluster_2)] + efg_freq[(cluster_2, cluster_1)]
+            sum_freq = (
+                efg_freq[(cluster_1, cluster_2)] + efg_freq[(cluster_2, cluster_1)]
+            )
             if sum_freq > 0:
-                if (float(efg_freq[(cluster_1, cluster_2)]) / sum_freq) >= order_frequency_ratio:
+                if (
+                    float(efg_freq[(cluster_1, cluster_2)]) / sum_freq
+                ) >= order_frequency_ratio:
                     po.add_edge(cluster_1, cluster_2)
-                if (float(efg_freq[cluster_2, cluster_1]) / sum_freq) >= order_frequency_ratio:
+                if (
+                    float(efg_freq[cluster_2, cluster_1]) / sum_freq
+                ) >= order_frequency_ratio:
                     po.add_edge(cluster_2, cluster_1)
 
     # Step 2: Ensure Transitivity and Irreflexivity
@@ -52,12 +64,24 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
         while continue_loop:
             continue_loop = False
             for i, j, k in product(range(n), range(n), range(n)):
-                if i != j and j != k and po.edges[i][j] and po.edges[j][k] and not po.is_edge_id(i, k):
-                    if efg_freq[(po.nodes[k], po.nodes[i])] + efg_freq[(po.nodes[i], po.nodes[k])] == 0:
+                if (
+                    i != j
+                    and j != k
+                    and po.edges[i][j]
+                    and po.edges[j][k]
+                    and not po.is_edge_id(i, k)
+                ):
+                    if (
+                        efg_freq[(po.nodes[k], po.nodes[i])]
+                        + efg_freq[(po.nodes[i], po.nodes[k])]
+                        == 0
+                    ):
                         po.edges[i][k] = True
                         continue_loop = True
                     else:
-                        clusters = cut_util.merge_lists_based_on_activities(po.nodes[i][0], po.nodes[k][0], clusters)
+                        clusters = cut_util.merge_lists_based_on_activities(
+                            po.nodes[i][0], po.nodes[k][0], clusters
+                        )
                         return generate_order(obj, clusters, order_frequency_ratio)
 
     if not po.is_irreflexive():
@@ -65,8 +89,12 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
             cluster_1 = po.nodes[i]
             for j in range(i + 1, len(po.nodes)):
                 cluster_2 = po.nodes[j]
-                if po.is_edge(cluster_1, cluster_2) and po.is_edge(cluster_2, cluster_1):
-                    clusters = cut_util.merge_lists_based_on_activities(cluster_1[0], cluster_2[0], clusters)
+                if po.is_edge(cluster_1, cluster_2) and po.is_edge(
+                    cluster_2, cluster_1
+                ):
+                    clusters = cut_util.merge_lists_based_on_activities(
+                        cluster_1[0], cluster_2[0], clusters
+                    )
                     changed = True
 
     if changed:
@@ -77,10 +105,15 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
         cluster_1 = po.nodes[i]
         for j in range(i + 1, len(po.nodes)):
             cluster_2 = po.nodes[j]
-            if not po.is_edge(cluster_1, cluster_2) and not po.is_edge(cluster_2, cluster_1) \
-                    and efg_freq[(cluster_1, cluster_2)] == 0 \
-                    and efg_freq[(cluster_2, cluster_1)] == 0:
-                clusters = cut_util.merge_lists_based_on_activities(cluster_1[0], cluster_2[0], clusters)
+            if (
+                not po.is_edge(cluster_1, cluster_2)
+                and not po.is_edge(cluster_2, cluster_1)
+                and efg_freq[(cluster_1, cluster_2)] == 0
+                and efg_freq[(cluster_2, cluster_1)] == 0
+            ):
+                clusters = cut_util.merge_lists_based_on_activities(
+                    cluster_1[0], cluster_2[0], clusters
+                )
                 changed = True
 
     if changed:
@@ -105,7 +138,9 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
         for j in range(i + 1, len(po.nodes)):
             cluster_2 = po.nodes[j]
             if pre[cluster_1] == pre[cluster_2] and post[cluster_1] == post[cluster_2]:
-                clusters = cut_util.merge_lists_based_on_activities(cluster_1[0], cluster_2[0], clusters)
+                clusters = cut_util.merge_lists_based_on_activities(
+                    cluster_1[0], cluster_2[0], clusters
+                )
                 changed = True
 
     if changed and len(clusters) > 1:
@@ -114,7 +149,9 @@ def generate_order(obj: T, clusters, order_frequency_ratio):
         return po
 
 
-def compute_efg_frequencies(interval_log: IMDataStructureUVCL, groups) -> Dict[Tuple[str, str], int]:
+def compute_efg_frequencies(
+    interval_log: IMDataStructureUVCL, groups
+) -> Dict[Tuple[str, str], int]:
     res = {(g1, g2): 0 for g1 in groups for g2 in groups}
 
     activity_to_cluster = {}
@@ -150,26 +187,33 @@ def compute_dfg_transitive_closure(dfg: Counter, groups) -> Dict[Tuple[str, str]
             cluster_1 = activity_to_cluster.get(a)
             cluster_2 = activity_to_cluster.get(b)
             pair = (cluster_1, cluster_2)
-            result[pair] += 1 # count is just existence
+            result[pair] += 1  # count is just existence
 
     return result
 
 
 class DynamicClusteringFrequencyPartialOrderCut(Cut[T], ABC, Generic[T]):
-
     @classmethod
-    def operator(cls, parameters: Optional[Dict[str, Any]] = None) -> StrictPartialOrder:
+    def operator(
+        cls, parameters: Optional[Dict[str, Any]] = None
+    ) -> StrictPartialOrder:
         return StrictPartialOrder([])
 
     @classmethod
-    def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[BinaryRelation]:
+    def holds(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[BinaryRelation]:
         alphabet = sorted(dfu.get_vertices(obj.dfg), key=lambda g: g.__str__())
         clusters = [[a] for a in alphabet]
 
         if ORDER_FREQUENCY_RATIO in parameters.keys():
             order_frequency_ratio = parameters[ORDER_FREQUENCY_RATIO]
             if not (0.5 < order_frequency_ratio <= 1.0):
-                raise ValueError("Parameter value of " + ORDER_FREQUENCY_RATIO + "must be in range: 0.5 < value <= 1.0")
+                raise ValueError(
+                    "Parameter value of "
+                    + ORDER_FREQUENCY_RATIO
+                    + "must be in range: 0.5 < value <= 1.0"
+                )
         else:
             order_frequency_ratio = 1.0
 
@@ -177,8 +221,9 @@ class DynamicClusteringFrequencyPartialOrderCut(Cut[T], ABC, Generic[T]):
         return po
 
     @classmethod
-    def apply(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[Tuple[StrictPartialOrder,
-                                                                                          List[POWL]]]:
+    def apply(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[StrictPartialOrder, List[POWL]]]:
         g = cls.holds(obj, parameters)
         if g is None:
             return g
@@ -192,17 +237,27 @@ class DynamicClusteringFrequencyPartialOrderCut(Cut[T], ABC, Generic[T]):
         return po, po.children
 
 
-class DynamicClusteringFrequencyPartialOrderCutUVCL(DynamicClusteringFrequencyPartialOrderCut[IMDataStructureUVCL]):
-
+class DynamicClusteringFrequencyPartialOrderCutUVCL(
+    DynamicClusteringFrequencyPartialOrderCut[IMDataStructureUVCL]
+):
     @classmethod
-    def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
+    def project(
+        cls,
+        obj: IMDataStructureUVCL,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureUVCL]:
         return project_on_groups_with_unique_activities(obj.data_structure, groups)
 
 
-class DynamicClusteringFrequencyPartialOrderCutDFG(DynamicClusteringFrequencyPartialOrderCut[IMDataStructureDFG]):
-
+class DynamicClusteringFrequencyPartialOrderCutDFG(
+    DynamicClusteringFrequencyPartialOrderCut[IMDataStructureDFG]
+):
     @classmethod
-    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+    def project(
+        cls,
+        obj: IMDataStructureDFG,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureDFG]:
         return MaximalPartialOrderCutDFG.project(obj, groups, parameters)

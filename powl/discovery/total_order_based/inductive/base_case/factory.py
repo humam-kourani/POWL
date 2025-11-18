@@ -1,21 +1,32 @@
-from typing import TypeVar, Optional, Dict, Any, Type, List as TList
+from typing import Any, Dict, List as TList, Optional, Type, TypeVar
+
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructure,
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
 
 from powl.discovery.total_order_based.inductive.base_case.abc import BaseCase
-from powl.discovery.total_order_based.inductive.base_case.empty_log import EmptyLogBaseCaseUVCL, EmptyLogBaseCaseDFG
-from powl.discovery.total_order_based.inductive.base_case.single_activity import SingleActivityBaseCaseUVCL, \
-    SingleActivityBaseCaseDFG
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructure, IMDataStructureUVCL, IMDataStructureDFG
+from powl.discovery.total_order_based.inductive.base_case.empty_log import (
+    EmptyLogBaseCaseDFG,
+    EmptyLogBaseCaseUVCL,
+)
+from powl.discovery.total_order_based.inductive.base_case.single_activity import (
+    SingleActivityBaseCaseDFG,
+    SingleActivityBaseCaseUVCL,
+)
 
 from powl.objects.obj import POWL
 
-T = TypeVar('T', bound=IMDataStructure)
-S = TypeVar('S', bound=BaseCase)
+T = TypeVar("T", bound=IMDataStructure)
+S = TypeVar("S", bound=BaseCase)
 
 
 class BaseCaseFactory:
-
     @classmethod
-    def get_base_cases(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> TList[Type[S]]:
+    def get_base_cases(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> TList[Type[S]]:
         if type(obj) is IMDataStructureUVCL:
             return [EmptyLogBaseCaseUVCL, SingleActivityBaseCaseUVCL]
         elif type(obj) is IMDataStructureDFG:
@@ -24,7 +35,9 @@ class BaseCaseFactory:
             return []
 
     @classmethod
-    def apply_base_cases(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[POWL]:
+    def apply_base_cases(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[POWL]:
         for b in BaseCaseFactory.get_base_cases(obj):
             r = b.apply(obj, parameters)
             if r is not None:

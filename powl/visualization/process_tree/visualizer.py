@@ -1,11 +1,12 @@
-from pm4py.visualization.common import gview
-from pm4py.visualization.common import save as gsave
-from powl.visualization.process_tree.variants import wo_decoration
 from enum import Enum
-from pm4py.util import exec_utils
-from typing import Optional, Dict, Any
-from pm4py.objects.process_tree.obj import ProcessTree
+from typing import Any, Dict, Optional
+
 import graphviz
+from pm4py.objects.process_tree.obj import ProcessTree
+from pm4py.util import exec_utils
+from pm4py.visualization.common import gview, save as gsave
+
+from powl.visualization.process_tree.variants import wo_decoration
 
 
 class Variants(Enum):
@@ -15,7 +16,11 @@ class Variants(Enum):
 DEFAULT_VARIANT = Variants.WO_DECORATION
 
 
-def apply(tree0: ProcessTree, parameters: Optional[Dict[Any, Any]] = None, variant=DEFAULT_VARIANT) -> graphviz.Graph:
+def apply(
+    tree0: ProcessTree,
+    parameters: Optional[Dict[Any, Any]] = None,
+    variant=DEFAULT_VARIANT,
+) -> graphviz.Graph:
     """
     Method for Process Tree representation
 
