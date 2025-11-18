@@ -1,6 +1,8 @@
-from powl.conversion.variants import to_petri_net
-from pm4py.util import exec_utils
 from enum import Enum
+
+from pm4py.util import exec_utils
+
+from powl.conversion.variants import to_petri_net
 
 
 class Variants(Enum):

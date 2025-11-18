@@ -5,12 +5,13 @@ import re
 import shutil
 import tempfile
 import webbrowser
-
-from powl.visualization.powl.variants import basic
-from powl.visualization.powl.variants import net
 from enum import Enum
+
 from pm4py.util import exec_utils
+
 from powl.objects.obj import POWL
+
+from powl.visualization.powl.variants import basic, net
 
 
 class POWLVisualizationVariants(Enum):
@@ -25,29 +26,33 @@ def inline_images_and_svgs(svg_content):
     img_pattern = re.compile(r'<image[^>]+xlink:href=["\'](.*?)["\'][^>]*>')
 
     def encode_file_to_base64(file_path):
-        with open(file_path, 'rb') as file:
-            return base64.b64encode(file.read()).decode('utf-8')
+        with open(file_path, "rb") as file:
+            return base64.b64encode(file.read()).decode("utf-8")
 
     def read_file_content_and_viewbox(file_path):
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             content = file.read()
-            content = re.sub(r'<\?xml.*?\?>', '', content, flags=re.DOTALL)
-            content = re.sub(r'<!DOCTYPE.*?>', '', content, flags=re.DOTALL)
+            content = re.sub(r"<\?xml.*?\?>", "", content, flags=re.DOTALL)
+            content = re.sub(r"<!DOCTYPE.*?>", "", content, flags=re.DOTALL)
             viewBox_match = re.search(r'viewBox="([^"]*)"', content)
             viewBox = viewBox_match.group(1) if viewBox_match else "0 0 1 1"
-            svg_content_match = re.search(r'<svg[^>]*>(.*?)</svg>', content, re.DOTALL)
+            svg_content_match = re.search(r"<svg[^>]*>(.*?)</svg>", content, re.DOTALL)
             svg_content = svg_content_match.group(1) if svg_content_match else content
             return svg_content, viewBox
 
     def replace_with_inline_content(match):
         file_path = match.group(1)
-        if file_path.lower().endswith('.svg'):
+        if file_path.lower().endswith(".svg"):
             svg_data, viewBox = read_file_content_and_viewbox(file_path)
             viewBox_values = [float(v) for v in viewBox.split()]
             actual_width, actual_height = viewBox_values[2], viewBox_values[3]
 
-            intended_width = float(match.group(0).split('width="')[1].split('"')[0].replace('px', ''))
-            intended_height = float(match.group(0).split('height="')[1].split('"')[0].replace('px', ''))
+            intended_width = float(
+                match.group(0).split('width="')[1].split('"')[0].replace("px", "")
+            )
+            intended_height = float(
+                match.group(0).split('height="')[1].split('"')[0].replace("px", "")
+            )
             x = float(match.group(0).split('x="')[1].split('"')[0])
             y = float(match.group(0).split('y="')[1].split('"')[0])
 
@@ -57,13 +62,14 @@ def inline_images_and_svgs(svg_content):
             return f'<g transform="translate({x},{y}) scale({scale_x},{scale_y})">{svg_data}</g>'
         else:
             base64_data = encode_file_to_base64(file_path)
-            return match.group(0).replace(file_path, f"data:image/png;base64,{base64_data}")
+            return match.group(0).replace(
+                file_path, f"data:image/png;base64,{base64_data}"
+            )
 
     return img_pattern.sub(replace_with_inline_content, svg_content)
 
 
-def apply(powl: POWL, variant=DEFAULT_VARIANT, frequency_tags=True)\
-        -> str:
+def apply(powl: POWL, variant=DEFAULT_VARIANT, frequency_tags=True) -> str:
     """
     Method for POWL model representation
 
@@ -91,7 +97,7 @@ def apply(powl: POWL, variant=DEFAULT_VARIANT, frequency_tags=True)\
         powl = copy.deepcopy(powl).simplify_using_frequent_transitions()
 
     viz = exec_utils.get_variant(variant).apply(powl)
-    svg_content = viz.pipe().decode('utf-8')
+    svg_content = viz.pipe().decode("utf-8")
 
     svg_content_with_inline_images = inline_images_and_svgs(svg_content)
 
@@ -110,7 +116,7 @@ def save(svg_content: str, output_file_path: str):
         Path where the output file should be saved
     """
 
-    with tempfile.NamedTemporaryFile(delete=False, mode='w+', suffix='.svg') as tmpfile:
+    with tempfile.NamedTemporaryFile(delete=False, mode="w+", suffix=".svg") as tmpfile:
         tmpfile.write(svg_content)
         tmpfile_path = tmpfile.name
 
@@ -133,9 +139,9 @@ def view(svg_content: str):
         SVG content
     """
 
-    with tempfile.NamedTemporaryFile(delete=False, mode='w+', suffix='.svg') as tmpfile:
+    with tempfile.NamedTemporaryFile(delete=False, mode="w+", suffix=".svg") as tmpfile:
         tmpfile.write(svg_content)
         tmpfile_path = tmpfile.name
 
         absolute_path = os.path.abspath(tmpfile_path)
-        return webbrowser.open('file://' + absolute_path)
+        return webbrowser.open("file://" + absolute_path)

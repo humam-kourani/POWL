@@ -1,15 +1,19 @@
-from pm4py.objects.ocel.obj import OCEL
-from pm4py.algo.discovery.ocel.ocdfg.variants import classic as ocdfg_discovery
-from enum import Enum
-from pm4py.util import exec_utils
 from collections import Counter
-from typing import Optional, Dict, Any
-from pm4py.algo.conformance.tokenreplay import algorithm as token_based_replay
-from pm4py.objects.ocel.util import flattening
 from copy import copy
+from enum import Enum
+from typing import Any, Dict, Optional
+
+from pm4py.algo.conformance.tokenreplay import algorithm as token_based_replay
+from pm4py.algo.discovery.ocel.ocdfg.variants import classic as ocdfg_discovery
+from pm4py.objects.ocel.obj import OCEL
+from pm4py.objects.ocel.util import flattening
+from pm4py.util import exec_utils
+
 from powl.conversion.converter import apply as powl_converter
 from powl.discovery.total_order_based.algorithm import apply as powl_miner
-from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
+from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import (
+    POWLDiscoveryVariant,
+)
 
 
 class Parameters(Enum):
@@ -18,9 +22,7 @@ class Parameters(Enum):
     DIAGNOSTICS_WITH_TBR = "diagnostics_with_token_based_replay"
 
 
-def apply(
-    ocel: OCEL, parameters: Optional[Dict[Any, Any]] = None
-) -> Dict[str, Any]:
+def apply(ocel: OCEL, parameters: Optional[Dict[Any, Any]] = None) -> Dict[str, Any]:
     """
     Discovers an object-centric Petri net (without annotation) from the given object-centric event log,
     using the POWL Inductive Miner as process discovery algorithm.

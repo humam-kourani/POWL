@@ -1,18 +1,26 @@
 import warnings
 from bisect import bisect_left
 from collections import defaultdict
-from typing import List, Any, Set
+from typing import Any, List, Set
+
 import pandas as pd
 
 from powl.discovery.partial_order_based.utils.constants import VARIANT_FREQUENCY_KEY
-from powl.discovery.partial_order_based.utils.simplified_objects import ActivityInstance, Graph
+from powl.discovery.partial_order_based.utils.simplified_objects import (
+    ActivityInstance,
+    Graph,
+)
 from powl.general_utils.time_utils import should_parse_column_as_date
 
 
 def generate_interval_df_fifo(
-        df: pd.DataFrame,
-        case_id_col: str, activity_col: str, ordering_col: str, lifecycle_col: str or None,
-        start_transitions: Set[str], complete_transitions: Set[str]
+    df: pd.DataFrame,
+    case_id_col: str,
+    activity_col: str,
+    ordering_col: str,
+    lifecycle_col: str or None,
+    start_transitions: Set[str],
+    complete_transitions: Set[str],
 ) -> pd.DataFrame:
 
     cols_to_keep = [case_id_col, activity_col, ordering_col]
@@ -48,12 +56,16 @@ def generate_interval_df_fifo(
                     else:
                         start_timestamp = timestamp
                     activity_instance_counter[activity_name] += 1
-                    all_intervals.append({
-                        case_id_col: case_id,
-                        'activity': ActivityInstance(activity_name, activity_instance_counter[activity_name]),
-                        'start_timestamp': start_timestamp,
-                        'end_timestamp': timestamp
-                    })
+                    all_intervals.append(
+                        {
+                            case_id_col: case_id,
+                            "activity": ActivityInstance(
+                                activity_name, activity_instance_counter[activity_name]
+                            ),
+                            "start_timestamp": start_timestamp,
+                            "end_timestamp": timestamp,
+                        }
+                    )
 
         interval_df = pd.DataFrame(all_intervals) if all_intervals else pd.DataFrame()
 
@@ -61,24 +73,31 @@ def generate_interval_df_fifo(
         # No lifecycle: each event is an atomic interval
         df_filtered = df_filtered.sort_values([case_id_col, ordering_col])
         group_cols = [case_id_col, activity_col]
-        df_filtered['instance_id'] = df_filtered.groupby(group_cols).cumcount()
+        df_filtered["instance_id"] = df_filtered.groupby(group_cols).cumcount()
 
-        df_filtered['activity'] = [ActivityInstance(act, inst + 1) for act, inst in
-                                   zip(df_filtered[activity_col], df_filtered['instance_id'])]
-        df_filtered['start_timestamp'] = df_filtered[ordering_col]
-        df_filtered['end_timestamp'] = df_filtered[ordering_col]
+        df_filtered["activity"] = [
+            ActivityInstance(act, inst + 1)
+            for act, inst in zip(df_filtered[activity_col], df_filtered["instance_id"])
+        ]
+        df_filtered["start_timestamp"] = df_filtered[ordering_col]
+        df_filtered["end_timestamp"] = df_filtered[ordering_col]
 
-        interval_df = df_filtered[[case_id_col, 'activity', 'start_timestamp', 'end_timestamp']]
+        interval_df = df_filtered[
+            [case_id_col, "activity", "start_timestamp", "end_timestamp"]
+        ]
 
     if interval_df.empty:
         return pd.DataFrame()
 
     # Sort for consistent output and to aid the next processing step
-    interval_df = interval_df.sort_values([case_id_col, 'start_timestamp', 'end_timestamp']).reset_index(drop=True)
-    interval_df['event_instance_id'] = interval_df.index
-    print(f"Successfully created {len(interval_df)} activity intervals using FIFO logic.")
+    interval_df = interval_df.sort_values(
+        [case_id_col, "start_timestamp", "end_timestamp"]
+    ).reset_index(drop=True)
+    interval_df["event_instance_id"] = interval_df.index
+    print(
+        f"Successfully created {len(interval_df)} activity intervals using FIFO logic."
+    )
     return interval_df
-
 
 
 def apply(
@@ -100,34 +119,50 @@ def apply(
 
     if lifecycle_col:
         if lifecycle_col in df.columns:
-            complete_log = df[df['lifecycle:transition'].isin(complete_transitions)]
+            complete_log = df[df["lifecycle:transition"].isin(complete_transitions)]
             if len(complete_log) == 0:
                 lifecycle_col = None
-                warnings.warn(message=f'The event log does not contain any completion events! All events will be considered during discovery!', category=UserWarning)
+                warnings.warn(
+                    message=f"The event log does not contain any completion events! All events will be considered during discovery!",
+                    category=UserWarning,
+                )
         else:
             lifecycle_col = None
-            warnings.warn(f'The event log does not contain any attribute with the lifecycle key "{lifecycle_col}"! All events will be considered during discovery!', category=UserWarning)
+            warnings.warn(
+                f'The event log does not contain any attribute with the lifecycle key "{lifecycle_col}"! All events will be considered during discovery!',
+                category=UserWarning,
+            )
 
     if should_parse_column_as_date(df, ordering_col):
         df[ordering_col] = pd.to_datetime(df[ordering_col])
 
     interval_df = generate_interval_df_fifo(
-        df, case_id_col, activity_col, ordering_col, lifecycle_col,
-        start_transitions, complete_transitions
+        df,
+        case_id_col,
+        activity_col,
+        ordering_col,
+        lifecycle_col,
+        start_transitions,
+        complete_transitions,
     )
 
     if interval_df.empty:
         raise Exception("Interval DataFrame is empty, no variants to generate.")
 
     variants_key_to_frequency = defaultdict(int)
-    interval_df = interval_df.sort_values([case_id_col, 'start_timestamp', 'end_timestamp']).reset_index(drop=True)
+    interval_df = interval_df.sort_values(
+        [case_id_col, "start_timestamp", "end_timestamp"]
+    ).reset_index(drop=True)
     grouped_intervals = interval_df.groupby(case_id_col, sort=False)
 
     for case_id, trace_df in grouped_intervals:
-        trace_activities_multiset = frozenset(trace_df['activity'].tolist())
+        trace_activities_multiset = frozenset(trace_df["activity"].tolist())
 
         trace_events = list(
-            trace_df[['activity', 'start_timestamp', 'end_timestamp']].itertuples(index=False, name=None))
+            trace_df[["activity", "start_timestamp", "end_timestamp"]].itertuples(
+                index=False, name=None
+            )
+        )
         events_sorted_by_end = sorted(trace_events, key=lambda x: x[2])
         end_timestamps = [event[2] for event in events_sorted_by_end]
 
@@ -151,9 +186,7 @@ def apply(
     ]
 
     output_list.sort(
-        key=lambda x: x.additional_information[VARIANT_FREQUENCY_KEY],
-        reverse=True
+        key=lambda x: x.additional_information[VARIANT_FREQUENCY_KEY], reverse=True
     )
 
     return output_list
-

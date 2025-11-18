@@ -1,17 +1,21 @@
 from abc import ABC
 from collections import Counter
 from itertools import combinations
-from typing import Any, Optional, Dict, List, Generic, Tuple, Collection
+from typing import Any, Collection, Dict, Generic, List, Optional, Tuple
 
 from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
-from powl.objects.BinaryRelation import BinaryRelation
-from powl.objects.obj import StrictPartialOrder, POWL
-from pm4py.objects.dfg import util as dfu
-from pm4py.statistics.eventually_follows.uvcl.get import apply as to_efg
 from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
+from pm4py.objects.dfg import util as dfu
 from pm4py.objects.dfg.obj import DFG
 from pm4py.objects.dfg.util import get_transitive_relations
+from pm4py.statistics.eventually_follows.uvcl.get import apply as to_efg
+
+from powl.objects.BinaryRelation import BinaryRelation
+from powl.objects.obj import POWL, StrictPartialOrder
 
 
 def generate_initial_order(nodes, efg):
@@ -134,13 +138,16 @@ def get_efg(post_sets):
 
 
 class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
-
     @classmethod
-    def operator(cls, parameters: Optional[Dict[str, Any]] = None) -> StrictPartialOrder:
+    def operator(
+        cls, parameters: Optional[Dict[str, Any]] = None
+    ) -> StrictPartialOrder:
         return StrictPartialOrder([])
 
     @classmethod
-    def holds(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[BinaryRelation]:
+    def holds(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[BinaryRelation]:
 
         dfg = obj.dfg
 
@@ -164,8 +171,9 @@ class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
             return None
 
     @classmethod
-    def apply(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[Tuple[StrictPartialOrder,
-                                                                                          List[POWL]]]:
+    def apply(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[StrictPartialOrder, List[POWL]]]:
         g = cls.holds(obj, parameters)
         if g is None:
             return g
@@ -179,7 +187,9 @@ class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
         return po, po.children
 
 
-def project_on_groups_with_unique_activities(log: Counter, groups: List[Collection[Any]]):
+def project_on_groups_with_unique_activities(
+    log: Counter, groups: List[Collection[Any]]
+):
     r = list()
     for g in groups:
         new_log = Counter()
@@ -198,16 +208,17 @@ def project_on_groups_with_unique_activities(log: Counter, groups: List[Collecti
 
 
 class MaximalPartialOrderCutUVCL(MaximalPartialOrderCut[IMDataStructureUVCL]):
-
     @classmethod
-    def project(cls, obj: IMDataStructureUVCL, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureUVCL]:
+    def project(
+        cls,
+        obj: IMDataStructureUVCL,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureUVCL]:
         return project_on_groups_with_unique_activities(obj.data_structure, groups)
 
 
-
 class MaximalPartialOrderCutDFG(MaximalPartialOrderCut[IMDataStructureDFG]):
-
     @classmethod
     def project(
         cls,
@@ -232,8 +243,12 @@ class MaximalPartialOrderCutDFG(MaximalPartialOrderCut[IMDataStructureDFG]):
                 act2grp[a] = gi
 
         dfgs: List[DFG] = [DFG() for _ in groups]
-        starts_from_out: List[Counter] = [Counter() for _ in groups]  # counts of y->x with y outside group
-        ends_to_out: List[Counter] = [Counter() for _ in groups]      # counts of x->y with y outside group
+        starts_from_out: List[Counter] = [
+            Counter() for _ in groups
+        ]  # counts of y->x with y outside group
+        ends_to_out: List[Counter] = [
+            Counter() for _ in groups
+        ]  # counts of x->y with y outside group
 
         # internal arcs and cross-boundary starts/ends
         for (a, b), count in base.graph.items():

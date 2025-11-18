@@ -1,25 +1,36 @@
 from abc import ABC
 from collections import Counter
-from typing import Any, Optional, Dict, Tuple, List, Generic, Collection
+from typing import Any, Collection, Dict, Generic, List, Optional, Tuple
 
 from pm4py.algo.discovery.inductive.base_case.abc import T
-from pm4py.algo.discovery.inductive.cuts.sequence import SequenceCut, SequenceCutUVCL, StrictSequenceCutUVCL, \
-    StrictSequenceCut, SequenceCutDFG, StrictSequenceCutDFG
-from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL, IMDataStructureDFG
-from powl.objects.obj import Sequence
-from pm4py.objects.dfg import util as dfu
+from pm4py.algo.discovery.inductive.cuts.sequence import (
+    SequenceCut,
+    SequenceCutDFG,
+    SequenceCutUVCL,
+    StrictSequenceCut,
+    StrictSequenceCutDFG,
+    StrictSequenceCutUVCL,
+)
 from pm4py.algo.discovery.inductive.dtypes.im_dfg import InductiveDFG
+from pm4py.algo.discovery.inductive.dtypes.im_ds import (
+    IMDataStructureDFG,
+    IMDataStructureUVCL,
+)
+from pm4py.objects.dfg import util as dfu
 from pm4py.objects.dfg.obj import DFG
+
+from powl.objects.obj import Sequence
 
 
 class POWLSequenceCut(SequenceCut, ABC, Generic[T]):
-
     @classmethod
     def operator(cls, parameters: Optional[Dict[str, Any]] = None) -> Sequence:
         return Sequence([])
 
     @classmethod
-    def apply(cls, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[Tuple[Sequence, List[T]]]:
+    def apply(
+        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[Sequence, List[T]]]:
         g = cls.holds(obj, parameters)
         if g is None:
             return g
@@ -36,13 +47,20 @@ class POWLSequenceCutUVCL(SequenceCutUVCL, POWLSequenceCut[IMDataStructureUVCL])
     pass
 
 
-class POWLStrictSequenceCutUVCL(StrictSequenceCutUVCL, StrictSequenceCut[IMDataStructureUVCL], POWLSequenceCutUVCL):
+class POWLStrictSequenceCutUVCL(
+    StrictSequenceCutUVCL, StrictSequenceCut[IMDataStructureUVCL], POWLSequenceCutUVCL
+):
     pass
+
 
 class POWLSequenceCutDFG(SequenceCutDFG, POWLSequenceCut[IMDataStructureDFG]):
     @classmethod
-    def project(cls, obj: IMDataStructureDFG, groups: List[Collection[Any]],
-                parameters: Optional[Dict[str, Any]] = None) -> List[IMDataStructureDFG]:
+    def project(
+        cls,
+        obj: IMDataStructureDFG,
+        groups: List[Collection[Any]],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> List[IMDataStructureDFG]:
         dfg = obj.dfg
         start_activities = []
         end_activities = []
@@ -108,8 +126,14 @@ class POWLSequenceCutDFG(SequenceCutDFG, POWLSequenceCut[IMDataStructureDFG]):
         while i < len(dfgs):
             dfi = DFG()
             [dfi.graph.update({(a, b): dfgs[i][(a, b)]}) for (a, b) in dfgs[i]]
-            [dfi.start_activities.update({a: start_activities[i][a]}) for a in start_activities[i]]
-            [dfi.end_activities.update({a: end_activities[i][a]}) for a in end_activities[i]]
+            [
+                dfi.start_activities.update({a: start_activities[i][a]})
+                for a in start_activities[i]
+            ]
+            [
+                dfi.end_activities.update({a: end_activities[i][a]})
+                for a in end_activities[i]
+            ]
             dfgs[i] = dfi
             i = i + 1
         for (a, b) in dfg.graph:
@@ -119,8 +143,13 @@ class POWLSequenceCutDFG(SequenceCutDFG, POWLSequenceCut[IMDataStructureDFG]):
                 skippable[j] = True
                 j = j + 1
 
-        return [IMDataStructureDFG(InductiveDFG(dfg=dfgs[i], skip=skippable[i])) for i in range(len(dfgs))]
+        return [
+            IMDataStructureDFG(InductiveDFG(dfg=dfgs[i], skip=skippable[i]))
+            for i in range(len(dfgs))
+        ]
 
 
-class POWLStrictSequenceCutDFG(StrictSequenceCutDFG, StrictSequenceCut[IMDataStructureDFG], POWLSequenceCutDFG):
+class POWLStrictSequenceCutDFG(
+    StrictSequenceCutDFG, StrictSequenceCut[IMDataStructureDFG], POWLSequenceCutDFG
+):
     pass

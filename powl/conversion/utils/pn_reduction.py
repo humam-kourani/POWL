@@ -12,8 +12,11 @@ def id_generator():
         count += 1
 
 
-def add_arc_from_to(source: Union[PetriNet.Place, PetriNet.Transition],
-                    target: Union[PetriNet.Transition, PetriNet.Place], net: PetriNet):
+def add_arc_from_to(
+    source: Union[PetriNet.Place, PetriNet.Transition],
+    target: Union[PetriNet.Transition, PetriNet.Place],
+    net: PetriNet,
+):
     arc = PetriNet.Arc(source, target)
     net.arcs.add(arc)
     source.out_arcs.add(arc)

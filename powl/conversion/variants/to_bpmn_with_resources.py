@@ -1,9 +1,13 @@
-import powl.conversion.variants.to_bpmn as pminer_bpmn_transformer
-import powl.visualization.bpmn.resource_utils.layouter as utils
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
 
-def apply(activity_to_pool_lane : dict[str, tuple[str, str]], powl) -> str:
-    original_pools = set([p for _, (p, _) in activity_to_pool_lane.items() if p is not None])
+import powl.conversion.variants.to_bpmn as pminer_bpmn_transformer
+import powl.visualization.bpmn.resource_utils.layouter as utils
+
+
+def apply(activity_to_pool_lane: dict[str, tuple[str, str]], powl) -> str:
+    original_pools = set(
+        [p for _, (p, _) in activity_to_pool_lane.items() if p is not None]
+    )
     activity_to_pool_lane_copy = activity_to_pool_lane.copy()
     if len(original_pools) == 0:
         # Modify it to have a default pool
@@ -18,8 +22,6 @@ def apply(activity_to_pool_lane : dict[str, tuple[str, str]], powl) -> str:
             activity_to_pool_lane[activity] = ("ProcessPool", lane)
         elif lane is None:
             activity_to_pool_lane[activity] = (pool, "DefaultLane")
-        
-    
 
     pools = utils.__pools_to_tasks(activity_to_pool_lane)
     _, G, _ = pminer_bpmn_transformer.apply(powl)

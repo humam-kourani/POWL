@@ -2,18 +2,25 @@ import time
 import uuid
 from itertools import product
 
-from powl.conversion.utils.pn_reduction import merge_places_connected_with_silent_transition, \
-    merge_places_with_identical_preset_or_postset
-from powl.objects.obj import Transition, SilentTransition, StrictPartialOrder, OperatorPOWL, FrequentTransition, \
-    DecisionGraph
-
 import pm4py.objects.conversion.process_tree.variants.to_petri_net as pt_to_pn
-from pm4py.objects.petri_net.obj import Marking
-from pm4py.objects.petri_net.obj import PetriNet
-from pm4py.objects.petri_net.utils.petri_utils import add_arc_from_to, remove_place
+from pm4py.objects.petri_net.obj import Marking, PetriNet
 
 from pm4py.objects.petri_net.utils import reduction
+from pm4py.objects.petri_net.utils.petri_utils import add_arc_from_to, remove_place
 from pm4py.objects.process_tree.obj import Operator
+
+from powl.conversion.utils.pn_reduction import (
+    merge_places_connected_with_silent_transition,
+    merge_places_with_identical_preset_or_postset,
+)
+from powl.objects.obj import (
+    DecisionGraph,
+    FrequentTransition,
+    OperatorPOWL,
+    SilentTransition,
+    StrictPartialOrder,
+    Transition,
+)
 
 REDUCE_IMPLICIT_PLACES = True
 
@@ -37,8 +44,16 @@ def add_transition_and_arcs(net, transition, p1, p2):
     add_arc_from_to(transition, p2, net)
 
 
-def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree, counts, rec_depth,
-                         flatten_frequency_tags, force_add_skip=False):
+def recursively_add_tree(
+    powl,
+    net,
+    initial_entity_subtree,
+    final_entity_subtree,
+    counts,
+    rec_depth,
+    flatten_frequency_tags,
+    force_add_skip=False,
+):
 
     if type(initial_entity_subtree) is PetriNet.Transition:
         initial_place = get_new_place(counts)
@@ -46,12 +61,18 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
         add_arc_from_to(initial_entity_subtree, initial_place, net)
     else:
         initial_place = initial_entity_subtree
-    if final_entity_subtree is not None and type(final_entity_subtree) is PetriNet.Place:
+    if (
+        final_entity_subtree is not None
+        and type(final_entity_subtree) is PetriNet.Place
+    ):
         final_place = final_entity_subtree
     else:
         final_place = get_new_place(counts)
         net.places.add(final_place)
-        if final_entity_subtree is not None and type(final_entity_subtree) is PetriNet.Transition:
+        if (
+            final_entity_subtree is not None
+            and type(final_entity_subtree) is PetriNet.Transition
+        ):
             add_arc_from_to(final_place, final_entity_subtree, net)
 
     if force_add_skip:
@@ -69,36 +90,55 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
                 if powl.skippable:
                     silent_t = get_new_hidden_trans(counts, type_trans="skip")
                     if powl.selfloop:
-                        add_transition_and_arcs(net, petri_trans, final_place, initial_place)
-                        add_transition_and_arcs(net, silent_t, initial_place, final_place)
+                        add_transition_and_arcs(
+                            net, petri_trans, final_place, initial_place
+                        )
+                        add_transition_and_arcs(
+                            net, silent_t, initial_place, final_place
+                        )
                     else:
-                        add_transition_and_arcs(net, petri_trans, initial_place, final_place)
-                        add_transition_and_arcs(net, silent_t, initial_place, final_place)
+                        add_transition_and_arcs(
+                            net, petri_trans, initial_place, final_place
+                        )
+                        add_transition_and_arcs(
+                            net, silent_t, initial_place, final_place
+                        )
                 else:
                     if powl.selfloop:
                         silent_t = get_new_hidden_trans(counts, type_trans="skip")
-                        add_transition_and_arcs(net, petri_trans, initial_place, final_place)
-                        add_transition_and_arcs(net, silent_t, final_place, initial_place)
+                        add_transition_and_arcs(
+                            net, petri_trans, initial_place, final_place
+                        )
+                        add_transition_and_arcs(
+                            net, silent_t, final_place, initial_place
+                        )
                     else:
-                        add_transition_and_arcs(net, petri_trans, initial_place, final_place)
+                        add_transition_and_arcs(
+                            net, petri_trans, initial_place, final_place
+                        )
 
             else:
-                petri_trans = get_transition(counts, powl.label, powl.activity, powl.skippable, powl.selfloop)
+                petri_trans = get_transition(
+                    counts, powl.label, powl.activity, powl.skippable, powl.selfloop
+                )
                 add_transition_and_arcs(net, petri_trans, initial_place, final_place)
         else:
             petri_trans = get_transition(counts, powl.label, powl.label)
             add_transition_and_arcs(net, petri_trans, initial_place, final_place)
 
-
     elif isinstance(powl, OperatorPOWL):
         tree_children = powl.children
         if powl.operator == Operator.XOR:
             for subtree in tree_children:
-                net, counts, intermediate_place = recursively_add_tree(subtree, net, initial_place,
-                                                                       final_place,
-                                                                       counts,
-                                                                       rec_depth + 1,
-                                                                       flatten_frequency_tags)
+                net, counts, intermediate_place = recursively_add_tree(
+                    subtree,
+                    net,
+                    initial_place,
+                    final_place,
+                    counts,
+                    rec_depth + 1,
+                    flatten_frequency_tags,
+                )
         elif powl.operator == Operator.LOOP:
             new_initial_place = get_new_place(counts)
             net.places.add(new_initial_place)
@@ -114,18 +154,27 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
             do = tree_children[0]
             redo = tree_children[1]
 
-            net, counts, int1 = recursively_add_tree(do, net, initial_place,
-                                                     None, counts,
-                                                     rec_depth + 1,
-                                                     flatten_frequency_tags)
-            net, counts, int2 = recursively_add_tree(redo, net, int1,
-                                                     None, counts,
-                                                     rec_depth + 1,
-                                                     flatten_frequency_tags)
-            net, counts, int3 = recursively_add_tree(exit_node, net, int1,
-                                                     final_place, counts,
-                                                     rec_depth + 1,
-                                                     flatten_frequency_tags)
+            net, counts, int1 = recursively_add_tree(
+                do,
+                net,
+                initial_place,
+                None,
+                counts,
+                rec_depth + 1,
+                flatten_frequency_tags,
+            )
+            net, counts, int2 = recursively_add_tree(
+                redo, net, int1, None, counts, rec_depth + 1, flatten_frequency_tags
+            )
+            net, counts, int3 = recursively_add_tree(
+                exit_node,
+                net,
+                int1,
+                final_place,
+                counts,
+                rec_depth + 1,
+                flatten_frequency_tags,
+            )
 
             looping_place = int2
 
@@ -164,13 +213,15 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
                 add_arc_from_to(f_trans, f_place, net)
                 add_arc_from_to(f_place, tau_join, net)
 
-            net, counts, intermediate_place = recursively_add_tree(subtree,
-                                                                   net,
-                                                                   i_trans,
-                                                                   f_trans,
-                                                                   counts,
-                                                                   rec_depth + 1,
-                                                                   flatten_frequency_tags)
+            net, counts, intermediate_place = recursively_add_tree(
+                subtree,
+                net,
+                i_trans,
+                f_trans,
+                counts,
+                rec_depth + 1,
+                flatten_frequency_tags,
+            )
             init_trans.append(i_trans)
             final_trans.append(f_trans)
 
@@ -184,7 +235,7 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
 
     elif isinstance(powl, DecisionGraph):
 
-        real_children = powl.children # without artificial start/end nodes
+        real_children = powl.children  # without artificial start/end nodes
         all_children = powl.order.nodes
 
         # create one unique input and one unique output places for each node
@@ -197,9 +248,15 @@ def recursively_add_tree(powl, net, initial_entity_subtree, final_entity_subtree
             net.places.add(post_place)
             node_to_pre_place[child] = pre_place
             node_to_post_place[child] = post_place
-            net, counts, _ = recursively_add_tree(child, net, pre_place,
-                                                  post_place, counts, rec_depth + 1,
-                                                  flatten_frequency_tags)
+            net, counts, _ = recursively_add_tree(
+                child,
+                net,
+                pre_place,
+                post_place,
+                counts,
+                rec_depth + 1,
+                flatten_frequency_tags,
+            )
 
         node_to_pre_place[powl.end] = final_place
         node_to_post_place[powl.start] = initial_place
@@ -228,7 +285,7 @@ def apply(powl, parameters=None):
         flatten_frequency_tags = True
 
     counts = pt_to_pn.Counts()
-    net = PetriNet('imdf_net_' + str(time.time()))
+    net = PetriNet("imdf_net_" + str(time.time()))
     initial_marking = Marking()
     final_marking = Marking()
     source = get_new_place(counts)
@@ -260,8 +317,15 @@ def apply(powl, parameters=None):
     else:
         final_place = sink
 
-    net, counts, last_added_place = recursively_add_tree(powl, net, initial_place, final_place, counts, 0,
-                                                         flatten_frequency_tags=flatten_frequency_tags)
+    net, counts, last_added_place = recursively_add_tree(
+        powl,
+        net,
+        initial_place,
+        final_place,
+        counts,
+        0,
+        flatten_frequency_tags=flatten_frequency_tags,
+    )
 
     if REDUCE_IMPLICIT_PLACES:
 
@@ -286,7 +350,7 @@ def get_new_place(counts):
     Create a new place in the Petri net
     """
     counts.inc_places()
-    return PetriNet.Place('p_' + str(counts.num_places))
+    return PetriNet.Place("p_" + str(counts.num_places))
 
 
 def get_new_hidden_trans(counts, type_trans="unknown"):
@@ -294,7 +358,7 @@ def get_new_hidden_trans(counts, type_trans="unknown"):
     Create a new hidden transition in the Petri net
     """
     counts.inc_no_hidden()
-    return PetriNet.Transition(type_trans + '_' + str(counts.num_hidden), None)
+    return PetriNet.Transition(type_trans + "_" + str(counts.num_hidden), None)
 
 
 def get_transition(counts, label, activity, skippable=False, selfloop=False):
@@ -302,6 +366,8 @@ def get_transition(counts, label, activity, skippable=False, selfloop=False):
     Create a transitions with the specified label in the Petri net
     """
     counts.inc_no_visible()
-    return PetriNet.Transition(str(uuid.uuid4()), label, properties={"activity": activity,
-                                                                     "skippable": skippable,
-                                                                     "selfloop": selfloop})
+    return PetriNet.Transition(
+        str(uuid.uuid4()),
+        label,
+        properties={"activity": activity, "skippable": skippable, "selfloop": selfloop},
+    )

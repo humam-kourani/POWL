@@ -1,38 +1,55 @@
 import os
 from abc import ABC
+
+from copy import copy
 from enum import Enum
 from itertools import combinations
-from typing import Optional, Tuple, List, TypeVar, Generic, Dict, Any, Type
+from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 from pm4py.algo.discovery.inductive.fall_through.empty_traces import EmptyTracesUVCL
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
-from pm4py.util import constants
-from pm4py.util import exec_utils
 from pm4py.objects.dfg.obj import DFG
+from pm4py.objects.process_tree.obj import Operator
+from pm4py.util import constants, exec_utils
 
-from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL, Sequence
-from powl.discovery.total_order_based.inductive.fall_through.empty_traces import POWLEmptyTracesUVCL
 from powl.discovery.total_order_based.inductive.base_case.factory import BaseCaseFactory
 from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory
-from powl.discovery.total_order_based.inductive.fall_through.factory import FallThroughFactory
-from powl.discovery.total_order_based.inductive.utils.filtering import FILTERING_TYPE, FilteringType, \
-    filter_most_frequent_variants, FILTERING_THRESHOLD, filter_most_frequent_variants_with_decreasing_factor
-from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import POWLDiscoveryVariant
+from powl.discovery.total_order_based.inductive.fall_through.empty_traces import (
+    POWLEmptyTracesUVCL,
+)
+from powl.discovery.total_order_based.inductive.fall_through.factory import (
+    FallThroughFactory,
+)
+from powl.discovery.total_order_based.inductive.utils.filtering import (
+    filter_most_frequent_variants,
+    filter_most_frequent_variants_with_decreasing_factor,
+    FILTERING_THRESHOLD,
+    FILTERING_TYPE,
+    FilteringType,
+)
+from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import (
+    POWLDiscoveryVariant,
+)
 from powl.objects.BinaryRelation import BinaryRelation
-from pm4py.objects.process_tree.obj import Operator
 
-from copy import copy
+from powl.objects.obj import (
+    DecisionGraph,
+    OperatorPOWL,
+    POWL,
+    Sequence,
+    StrictPartialOrder,
+)
 
 
-T = TypeVar('T', bound=IMDataStructureUVCL)
+T = TypeVar("T", bound=IMDataStructureUVCL)
+
 
 class Parameters(Enum):
     MULTIPROCESSING = "multiprocessing"
 
 
 class IMBasePOWL(ABC, Generic[T]):
-
     def __init__(self, parameters: Optional[Dict[str, Any]] = None):
         if parameters is None:
             parameters = {}
@@ -44,7 +61,7 @@ class IMBasePOWL(ABC, Generic[T]):
         )
 
         if enable_multiprocessing:
-            from multiprocessing import Pool, Manager
+            from multiprocessing import Manager, Pool
 
             self._pool = Pool(os.cpu_count() - 1)
             self._manager = Manager()
@@ -59,20 +76,32 @@ class IMBasePOWL(ABC, Generic[T]):
     def empty_traces_cut(self) -> Type[EmptyTracesUVCL]:
         return POWLEmptyTracesUVCL
 
-    def apply(self, obj: T, parameters: Optional[Dict[str, Any]] = None, second_iteration: bool = False) -> POWL:
+    def apply(
+        self,
+        obj: T,
+        parameters: Optional[Dict[str, Any]] = None,
+        second_iteration: bool = False,
+    ) -> POWL:
 
         # empty_traces = self.empty_traces_cut().apply(obj, parameters)
         # if empty_traces is not None:
         #     return self._recurse(empty_traces[0], empty_traces[1], parameters)
 
-        noise_threshold = exec_utils.get_param_value(IMFParameters.NOISE_THRESHOLD, parameters, 0.0)
+        noise_threshold = exec_utils.get_param_value(
+            IMFParameters.NOISE_THRESHOLD, parameters, 0.0
+        )
 
         empty_traces = self.empty_traces_cut().apply(obj, parameters)
         if empty_traces is not None:
             number_original_traces = sum(y for y in obj.data_structure.values())
-            number_filtered_traces = sum(y for y in empty_traces[1][-1].data_structure.values())
+            number_filtered_traces = sum(
+                y for y in empty_traces[1][-1].data_structure.values()
+            )
 
-            if number_original_traces - number_filtered_traces > noise_threshold * number_original_traces:
+            if (
+                number_original_traces - number_filtered_traces
+                > noise_threshold * number_original_traces
+            ):
                 return self._recurse(empty_traces[0], empty_traces[1], parameters)
             else:
                 obj = empty_traces[1][-1]
@@ -95,9 +124,13 @@ class IMBasePOWL(ABC, Generic[T]):
 
             if filtering_type is FilteringType.DFG_FREQUENCY:
                 if not second_iteration:
-                    noise_threshold = exec_utils.get_param_value(IMFParameters.NOISE_THRESHOLD, parameters, 0.0)
+                    noise_threshold = exec_utils.get_param_value(
+                        IMFParameters.NOISE_THRESHOLD, parameters, 0.0
+                    )
                     filtered_ds = self.__filter_dfg_noise(obj, noise_threshold)
-                    tree = self.apply(filtered_ds, parameters=parameters, second_iteration=True)
+                    tree = self.apply(
+                        filtered_ds, parameters=parameters, second_iteration=True
+                    )
                     if tree is not None:
                         return tree
 
@@ -114,11 +147,17 @@ class IMBasePOWL(ABC, Generic[T]):
                     if isinstance(t, list):
                         for factor in t:
                             if factor > 0:
-                                    filtered_log = filter_most_frequent_variants_with_decreasing_factor(obj.data_structure,                                                                                                decreasing_factor=factor)
-                                    if len(filtered_log.data_structure) == 0:
-                                        break
-                                    elif len(filtered_log.data_structure) < len(obj.data_structure):
-                                        return self.apply(filtered_log, parameters=parameters)
+                                filtered_log = filter_most_frequent_variants_with_decreasing_factor(
+                                    obj.data_structure, decreasing_factor=factor
+                                )
+                                if len(filtered_log.data_structure) == 0:
+                                    break
+                                elif len(filtered_log.data_structure) < len(
+                                    obj.data_structure
+                                ):
+                                    return self.apply(
+                                        filtered_log, parameters=parameters
+                                    )
                     else:
                         raise KeyError("Invalid filtering threshold!")
             else:
@@ -127,16 +166,26 @@ class IMBasePOWL(ABC, Generic[T]):
         ft = self.fall_through(obj, parameters)
         return self._recurse(ft[0], ft[1], parameters=parameters)
 
-    def apply_base_cases(self, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[POWL]:
+    def apply_base_cases(
+        self, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[POWL]:
         return BaseCaseFactory.apply_base_cases(obj, parameters=parameters)
 
-    def find_cut(self, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Optional[Tuple[POWL, List[T]]]:
+    def find_cut(
+        self, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Optional[Tuple[POWL, List[T]]]:
         return CutFactory.find_cut(obj, parameters=parameters)
 
-    def fall_through(self, obj: T, parameters: Optional[Dict[str, Any]] = None) -> Tuple[POWL, List[T]]:
-        return FallThroughFactory.fall_through(obj, self._pool, self._manager, parameters=parameters)
+    def fall_through(
+        self, obj: T, parameters: Optional[Dict[str, Any]] = None
+    ) -> Tuple[POWL, List[T]]:
+        return FallThroughFactory.fall_through(
+            obj, self._pool, self._manager, parameters=parameters
+        )
 
-    def _recurse(self, powl: POWL, objs: List[T], parameters: Optional[Dict[str, Any]] = None):
+    def _recurse(
+        self, powl: POWL, objs: List[T], parameters: Optional[Dict[str, Any]] = None
+    ):
         children = [self.apply(obj, parameters=parameters) for obj in objs]
         if isinstance(powl, StrictPartialOrder):
             if isinstance(powl, Sequence):
@@ -155,10 +204,20 @@ class IMBasePOWL(ABC, Generic[T]):
                     new_order.add_edge(children[i], children[j])
                 if powl.order.is_edge(objs[j], objs[i]):
                     new_order.add_edge(children[j], children[i])
-            start_nodes = [children[i] for i in range(len(powl.children)) if objs[i] in powl.start_nodes]
-            end_nodes = [children[i] for i in range(len(powl.children)) if objs[i] in powl.end_nodes]
+            start_nodes = [
+                children[i]
+                for i in range(len(powl.children))
+                if objs[i] in powl.start_nodes
+            ]
+            end_nodes = [
+                children[i]
+                for i in range(len(powl.children))
+                if objs[i] in powl.end_nodes
+            ]
             empty_path = powl.order.is_edge(powl.start, powl.end)
-            return DecisionGraph(new_order, start_nodes, end_nodes, empty_path=empty_path)
+            return DecisionGraph(
+                new_order, start_nodes, end_nodes, empty_path=empty_path
+            )
         elif isinstance(powl, OperatorPOWL):
             if powl.operator == Operator.LOOP and len(children) > 2:
                 new_child = OperatorPOWL(Operator.XOR, children[1:])
@@ -181,8 +240,12 @@ class IMBasePOWL(ABC, Generic[T]):
                 outgoing_max_occ[act] = max(y, outgoing_max_occ[act])
             if act in end_activities:
                 outgoing_max_occ[act] = max(outgoing_max_occ[act], end_activities[act])
-        dfg_list = sorted([(x, y) for x, y in dfg.items()], key=lambda x: (x[1], x[0]), reverse=True)
-        dfg_list = [x for x in dfg_list if x[1] > noise_threshold * outgoing_max_occ[x[0][0]]]
+        dfg_list = sorted(
+            [(x, y) for x, y in dfg.items()], key=lambda x: (x[1], x[0]), reverse=True
+        )
+        dfg_list = [
+            x for x in dfg_list if x[1] > noise_threshold * outgoing_max_occ[x[0][0]]
+        ]
         dfg_list = [x[0] for x in dfg_list]
         # filter the elements in the DFG
         graph = {x: y for x, y in dfg.items() if x in dfg_list}

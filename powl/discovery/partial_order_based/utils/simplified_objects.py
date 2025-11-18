@@ -1,8 +1,15 @@
 from typing import Set
 
-from powl.objects.obj import SilentTransition, Transition, OperatorPOWL, StrictPartialOrder, Operator
+from powl.objects.obj import (
+    Operator,
+    OperatorPOWL,
+    SilentTransition,
+    StrictPartialOrder,
+    Transition,
+)
 
 ENABLE_DUPLICATION = True
+
 
 class XOR:
     def __init__(self, children: frozenset):
@@ -21,17 +28,20 @@ class XOR:
         return False
 
     def __hash__(self):
-        return hash(('XOR', self.children))
+        return hash(("XOR", self.children))
 
     def __lt__(self, other):
         if isinstance(other, XOR):
             return sorted(self.children) < sorted(other.children)
-        elif isinstance(other, LOOP) or isinstance(other, Graph): # ActivityInstance < XOR < Loop < Graph
+        elif isinstance(other, LOOP) or isinstance(
+            other, Graph
+        ):  # ActivityInstance < XOR < Loop < Graph
             return True
         elif isinstance(other, ActivityInstance):
             return False
         else:
             return NotImplemented
+
 
 class Skip(XOR):
     _allow_init = False
@@ -74,12 +84,12 @@ class LOOP:
         return False
 
     def __hash__(self):
-        return hash(('LOOP', self.body, self.redo))
+        return hash(("LOOP", self.body, self.redo))
 
     def __lt__(self, other):
         if isinstance(other, LOOP):
             return (self.body, self.redo) < (other.body, other.redo)
-        elif isinstance(other, Graph): # ActivityInstance < XOR < Loop < Graph
+        elif isinstance(other, Graph):  # ActivityInstance < XOR < Loop < Graph
             return True
         elif isinstance(other, XOR) or isinstance(other, ActivityInstance):
             return False
@@ -96,7 +106,6 @@ class SelfLoop(LOOP):
         super().__init__(element, ActivityInstance(None, 1))
         self.element = element
 
-
     @classmethod
     def create(cls, element):
         if isinstance(element, SelfLoop):
@@ -112,7 +121,11 @@ class SelfLoop(LOOP):
 
 class SkipSelfLoop(LOOP):
     def __init__(self, element):
-        if isinstance(element, SkipSelfLoop) or isinstance(element, SelfLoop) or isinstance(element, Skip):
+        if (
+            isinstance(element, SkipSelfLoop)
+            or isinstance(element, SelfLoop)
+            or isinstance(element, Skip)
+        ):
             element = element.element
         super().__init__(ActivityInstance(None, 1), element)
         self.element = element
@@ -123,7 +136,7 @@ class SkipSelfLoop(LOOP):
 
 
 class ActivityInstance:
-    def __init__(self, label: str|None, number: int):
+    def __init__(self, label: str | None, number: int):
         if not ENABLE_DUPLICATION:
             number = 1
         if number < 1:
@@ -152,7 +165,11 @@ class ActivityInstance:
                 return True
             return (self.label, self.number) < (other.label, other.number)
         # ActivityInstance < XOR < Loop < Graph
-        elif isinstance(other, Graph) or isinstance(other, XOR) or isinstance(other, LOOP):
+        elif (
+            isinstance(other, Graph)
+            or isinstance(other, XOR)
+            or isinstance(other, LOOP)
+        ):
             return True
         else:
             return NotImplemented
@@ -168,17 +185,23 @@ class Graph:
             raise TypeError("Edges must be a frozenset.")
         for edge in edges:
             if not (isinstance(edge, tuple) and len(edge) == 2):
-                raise ValueError(f"Each edge must be a (source, target) tuple, found: {edge}")
+                raise ValueError(
+                    f"Each edge must be a (source, target) tuple, found: {edge}"
+                )
             if edge[0] not in nodes or edge[1] not in nodes:
                 raise ValueError(f"Edge {edge} refers to nodes not in the node set.")
 
         self.nodes = nodes
         self.edges = edges
-        self.additional_information = additional_information if additional_information else {}
+        self.additional_information = (
+            additional_information if additional_information else {}
+        )
 
     def __repr__(self):
-        nodes_repr = ', '.join(sorted(map(repr, self.nodes)))
-        edges_repr = ', '.join(f"{repr(src)}->{repr(tgt)}" for src, tgt in sorted(self.edges))
+        nodes_repr = ", ".join(sorted(map(repr, self.nodes)))
+        edges_repr = ", ".join(
+            f"{repr(src)}->{repr(tgt)}" for src, tgt in sorted(self.edges)
+        )
         return f"Graph(Nodes: {{{nodes_repr}}}, Edges: {{{edges_repr}}}, {self.additional_information})"
 
     def __eq__(self, other):
@@ -187,13 +210,20 @@ class Graph:
         return False
 
     def __hash__(self):
-        return hash(('Graph', self.nodes, self.edges))
+        return hash(("Graph", self.nodes, self.edges))
 
     def __lt__(self, other):
         if isinstance(other, Graph):
-            return (sorted(self.nodes), sorted(self.edges)) < (sorted(other.nodes), sorted(other.edges))
+            return (sorted(self.nodes), sorted(self.edges)) < (
+                sorted(other.nodes),
+                sorted(other.edges),
+            )
         # ActivityInstance < XOR < Loop < Graph
-        elif isinstance(other, XOR) or isinstance(other, ActivityInstance) or isinstance(other, LOOP):
+        elif (
+            isinstance(other, XOR)
+            or isinstance(other, ActivityInstance)
+            or isinstance(other, LOOP)
+        ):
             return False
         else:
             return NotImplemented
@@ -216,7 +246,7 @@ def get_leaves(node) -> Set[str]:
     return res
 
 
-def _simplified_model_to_powl(model, add_instance_number = False):
+def _simplified_model_to_powl(model, add_instance_number=False):
     if isinstance(model, ActivityInstance):
         if not model.label:
             return SilentTransition()
@@ -226,12 +256,20 @@ def _simplified_model_to_powl(model, add_instance_number = False):
             label = model.label
         return Transition(label=label)
     elif isinstance(model, XOR):
-        return OperatorPOWL(operator=Operator.XOR, children=[_simplified_model_to_powl(child) for child in model.children])
+        return OperatorPOWL(
+            operator=Operator.XOR,
+            children=[_simplified_model_to_powl(child) for child in model.children],
+        )
     elif isinstance(model, LOOP):
-        return OperatorPOWL(operator=Operator.LOOP, children=[_simplified_model_to_powl(model.body), _simplified_model_to_powl(model.redo)])
+        return OperatorPOWL(
+            operator=Operator.LOOP,
+            children=[
+                _simplified_model_to_powl(model.body),
+                _simplified_model_to_powl(model.redo),
+            ],
+        )
     elif not isinstance(model, Graph):
         raise NotImplementedError
-
 
     po = StrictPartialOrder([])
     submodels = model.nodes
@@ -263,14 +301,14 @@ def _simplified_model_to_powl(model, add_instance_number = False):
             po.order.add_edge(node, end)
 
     if not po.order.is_irreflexive():
-        raise ValueError('Not irreflexive!')
+        raise ValueError("Not irreflexive!")
 
     if not po.order.is_transitive():
-        raise ValueError('Not transitive!')
+        raise ValueError("Not transitive!")
 
     return po
 
 
-def generate_powl(model, add_instance_number = False):
-    powl = _simplified_model_to_powl(model, add_instance_number = add_instance_number)
+def generate_powl(model, add_instance_number=False):
+    powl = _simplified_model_to_powl(model, add_instance_number=add_instance_number)
     return powl.simplify()

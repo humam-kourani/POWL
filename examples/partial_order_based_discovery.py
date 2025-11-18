@@ -3,6 +3,7 @@ import os
 import pm4py
 import powl
 
+
 def execute_script():
 
     # Read event log (csv, xes, or xes.gz)
@@ -27,6 +28,7 @@ def execute_script():
     # Convert into a PM4Py BPMN model
     bpmn = powl.convert_to_bpmn(model)
     pm4py.view_bpmn(bpmn, format="SVG")
+
 
 if __name__ == "__main__":
     execute_script()

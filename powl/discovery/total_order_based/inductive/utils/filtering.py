@@ -1,5 +1,6 @@
-from enum import Enum, auto
 from collections import Counter
+from enum import auto, Enum
+
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 
 

@@ -1,16 +1,18 @@
 import copy
 from itertools import product
-from typing import Hashable, TypeVar, List as TList, Set as TSet
+from typing import Hashable, List as TList, Set as TSet, TypeVar
 
-T = TypeVar('T', bound=Hashable)
+T = TypeVar("T", bound=Hashable)
 
 
 class BinaryRelation:
-
     def __init__(self, nodes: TList[T]):
         self._number_nodes = 0
         self._set_nodes(nodes)
-        self._edges = [[False for _ in range(self._number_nodes)] for _ in range(self._number_nodes)]
+        self._edges = [
+            [False for _ in range(self._number_nodes)]
+            for _ in range(self._number_nodes)
+        ]
         self._start_nodes = None
         self._end_nodes = None
 
@@ -59,7 +61,13 @@ class BinaryRelation:
             while changed:
                 changed = False
                 for i, j, k in product(range(n), range(n), range(n)):
-                    if i != j and j != k and self._edges[i][j] and self._edges[j][k] and not self._edges[i][k]:
+                    if (
+                        i != j
+                        and j != k
+                        and self._edges[i][j]
+                        and self._edges[j][k]
+                        and not self._edges[i][k]
+                    ):
                         self._edges[j][k] = False
                         changed = True
 
@@ -94,7 +102,9 @@ class BinaryRelation:
 
     def get_transitive_reduction(self) -> "BinaryRelation":
         if not self.is_irreflexive():
-            raise ValueError("Cannot generate transitive reduction! Reflexivity detected!")
+            raise ValueError(
+                "Cannot generate transitive reduction! Reflexivity detected!"
+            )
 
         tc = BinaryRelation(self.nodes)
         tc._edges = copy.deepcopy(self._edges)
@@ -105,10 +115,15 @@ class BinaryRelation:
 
         n = len(self.nodes)
         for i, j, k in product(range(n), range(n), range(n)):
-            if i != j and j != k and tc.edges[i][j] and tc.edges[j][k] and tc.edges[i][k]:
+            if (
+                i != j
+                and j != k
+                and tc.edges[i][j]
+                and tc.edges[j][k]
+                and tc.edges[i][k]
+            ):
                 tr._edges[i][k] = False
         return tr
-
 
     def add_transitive_edges(self) -> None:
         n = len(self.nodes)
@@ -116,8 +131,13 @@ class BinaryRelation:
         while changed:
             changed = False
             for i, j, k in product(range(n), range(n), range(n)):
-                if i != j and j != k and self._edges[i][j] and self._edges[j][k] and not self.is_edge_id(
-                        i, k):
+                if (
+                    i != j
+                    and j != k
+                    and self._edges[i][j]
+                    and self._edges[j][k]
+                    and not self.is_edge_id(i, k)
+                ):
                     self._edges[i][k] = True
                     changed = True
 
@@ -150,7 +170,11 @@ class BinaryRelation:
     def is_transitive(self) -> bool:
         n = len(self.nodes)
         for i, j, k in product(range(n), range(n), range(n)):
-            if self.is_edge_id(i, j) and self.is_edge_id(j, k) and not self.is_edge_id(i, k):
+            if (
+                self.is_edge_id(i, j)
+                and self.is_edge_id(j, k)
+                and not self.is_edge_id(i, k)
+            ):
                 return False
         return True
 
@@ -188,4 +212,3 @@ class BinaryRelation:
             if self.is_edge(child, node):
                 res.add(node)
         return res
-

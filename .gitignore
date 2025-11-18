@@ -149,3 +149,6 @@ uv.lock
 
 # devcontainer configuration
 .devcontainer/
+
+# Pre-commit files
+.pre-commit-config.yaml

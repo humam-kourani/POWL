@@ -1,5 +1,13 @@
-from powl.objects.obj import POWL, Transition, SilentTransition, OperatorPOWL, StrictPartialOrder, Sequence
-from pm4py.objects.process_tree.obj import ProcessTree, Operator as PTOperator
+from pm4py.objects.process_tree.obj import Operator as PTOperator, ProcessTree
+
+from powl.objects.obj import (
+    OperatorPOWL,
+    POWL,
+    Sequence,
+    SilentTransition,
+    StrictPartialOrder,
+    Transition,
+)
 
 
 def apply(tree: ProcessTree) -> POWL:

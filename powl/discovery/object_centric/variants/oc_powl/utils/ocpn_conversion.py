@@ -1,9 +1,17 @@
+from pm4py.objects.petri_net.obj import Marking, PetriNet
+
 from powl.conversion.utils.pn_reduction import add_arc_from_to
 from powl.objects.BinaryRelation import BinaryRelation
-from powl.objects.obj import Transition, SilentTransition, OperatorPOWL, Operator, Sequence, StrictPartialOrder, \
-    DecisionGraph
-from powl.objects.oc_powl import ObjectCentricPOWL, LeafNode, ComplexModel
-from pm4py.objects.petri_net.obj import PetriNet, Marking
+from powl.objects.obj import (
+    DecisionGraph,
+    Operator,
+    OperatorPOWL,
+    Sequence,
+    SilentTransition,
+    StrictPartialOrder,
+    Transition,
+)
+from powl.objects.oc_powl import ComplexModel, LeafNode, ObjectCentricPOWL
 
 
 DIV_IF_ALL_CHILDREN_DIV = True
@@ -18,8 +26,7 @@ def generate_xor(children):
 
 def generate_flower_model(children):
     xor = generate_xor(children)
-    return OperatorPOWL(operator=Operator.LOOP,
-                        children=[SilentTransition(), xor])
+    return OperatorPOWL(operator=Operator.LOOP, children=[SilentTransition(), xor])
 
 
 def clone_workflow_net(
@@ -27,7 +34,7 @@ def clone_workflow_net(
     im: Marking,
     fm: Marking,
     name_suffix: str = "_copy",
-    label_delimiter: str = "<|>"
+    label_delimiter: str = "<|>",
 ):
     """
     Create a deep copy of a Petri net and its initial/final markings.
@@ -66,46 +73,93 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, div_edges):
         if oc_powl.activity == "" or object_type not in oc_powl.related:
             return SilentTransition()
         activity = oc_powl.activity
-        if object_type in oc_powl.get_type_information()[(activity,"div")]:
+        if object_type in oc_powl.get_type_information()[(activity, "div")]:
             return generate_flower_model([Transition(label=activity)])
         return Transition(label=activity)
 
     assert isinstance(oc_powl, ComplexModel)
-    related_activities = set([a for a in oc_powl.get_activities()
-        if object_type in oc_powl.get_type_information()[(a,"rel")] and a != ""])
+    related_activities = set(
+        [
+            a
+            for a in oc_powl.get_activities()
+            if object_type in oc_powl.get_type_information()[(a, "rel")] and a != ""
+        ]
+    )
 
     if not related_activities:
         return SilentTransition()
 
-    if all(object_type in oc_powl.get_type_information()[(a,"div")] for a in related_activities):
+    if all(
+        object_type in oc_powl.get_type_information()[(a, "div")]
+        for a in related_activities
+    ):
         return generate_flower_model([Transition(label=a) for a in related_activities])
 
     else:
-        loop = isinstance(oc_powl.flat_model, OperatorPOWL) and oc_powl.flat_model.operator == Operator.LOOP
-        parallel = isinstance(oc_powl.flat_model, StrictPartialOrder) and len(oc_powl.flat_model.order.edges) == 0
+        loop = (
+            isinstance(oc_powl.flat_model, OperatorPOWL)
+            and oc_powl.flat_model.operator == Operator.LOOP
+        )
+        parallel = (
+            isinstance(oc_powl.flat_model, StrictPartialOrder)
+            and len(oc_powl.flat_model.order.edges) == 0
+        )
         if loop:
-            return OperatorPOWL(operator=Operator.LOOP,
-                               children=[project_oc_powl(sub, object_type, div_edges) for sub in oc_powl.oc_children])
+            return OperatorPOWL(
+                operator=Operator.LOOP,
+                children=[
+                    project_oc_powl(sub, object_type, div_edges)
+                    for sub in oc_powl.oc_children
+                ],
+            )
         if parallel:
-            return StrictPartialOrder([project_oc_powl(sub, object_type, div_edges) for sub in oc_powl.oc_children])
+            return StrictPartialOrder(
+                [
+                    project_oc_powl(sub, object_type, div_edges)
+                    for sub in oc_powl.oc_children
+                ]
+            )
 
-        diverging = [i for i in range(len(oc_powl.oc_children)) if oc_powl.oc_children[i].get_activities() & related_activities
-            and all(object_type in oc_powl.get_type_information()[(a,"div")]
-                    for a in oc_powl.oc_children[i].get_activities() & related_activities)]
-        non_diverging = [i for i in range(len(oc_powl.oc_children)) if oc_powl.oc_children[i].get_activities()
-            & related_activities and i not in diverging]
+        diverging = [
+            i
+            for i in range(len(oc_powl.oc_children))
+            if oc_powl.oc_children[i].get_activities() & related_activities
+            and all(
+                object_type in oc_powl.get_type_information()[(a, "div")]
+                for a in oc_powl.oc_children[i].get_activities() & related_activities
+            )
+        ]
+        non_diverging = [
+            i
+            for i in range(len(oc_powl.oc_children))
+            if oc_powl.oc_children[i].get_activities() & related_activities
+            and i not in diverging
+        ]
 
         if isinstance(oc_powl.flat_model, StrictPartialOrder):
             div_activities = set(
-                sum([list(oc_powl.oc_children[i].get_activities() & related_activities) for i in diverging], []))
+                sum(
+                    [
+                        list(
+                            oc_powl.oc_children[i].get_activities() & related_activities
+                        )
+                        for i in diverging
+                    ],
+                    [],
+                )
+            )
             div_activities = {a for a in div_activities if a != ""}
 
             if div_activities:
-                div_subtree = generate_flower_model([Transition(label=a) for a in div_activities])
+                div_subtree = generate_flower_model(
+                    [Transition(label=a) for a in div_activities]
+                )
                 if len(non_diverging) > 0:
                     mapping = {
                         oc_powl.flat_model.children[i]: (
-                            project_oc_powl(oc_powl.oc_children[i], object_type, div_edges)
+                            project_oc_powl(
+                                oc_powl.oc_children[i], object_type, div_edges
+                            )
                             if i in non_diverging
                             else SilentTransition()
                         )
@@ -116,18 +170,30 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, div_edges):
                 else:
                     return div_subtree
             else:
-                mapping = {oc_powl.flat_model.children[i]: project_oc_powl(oc_powl.oc_children[i], object_type, div_edges) for i in range(len(oc_powl.oc_children))}
+                mapping = {
+                    oc_powl.flat_model.children[i]: project_oc_powl(
+                        oc_powl.oc_children[i], object_type, div_edges
+                    )
+                    for i in range(len(oc_powl.oc_children))
+                }
                 return oc_powl.flat_model.map_nodes(mapping)
 
         elif isinstance(oc_powl.flat_model, DecisionGraph):
 
             if DIV_IF_ALL_CHILDREN_DIV:
-                parts = _partition_children(oc_powl, diverging, related_activities, div_edges)
+                parts = _partition_children(
+                    oc_powl, diverging, related_activities, div_edges
+                )
 
                 mapping = {}
                 processed_ids = set()
                 for group in parts:
-                    div_children = [Transition(a) for i in group for a in oc_powl.oc_children[i].get_activities() & related_activities]
+                    div_children = [
+                        Transition(a)
+                        for i in group
+                        for a in oc_powl.oc_children[i].get_activities()
+                        & related_activities
+                    ]
                     flower = generate_flower_model(div_children)
                     for i in group:
                         processed_ids.add(i)
@@ -136,21 +202,32 @@ def project_oc_powl(oc_powl: ObjectCentricPOWL, object_type, div_edges):
                 for i in range(len(oc_powl.oc_children)):
                     if i in processed_ids:
                         continue
-                    mapping[oc_powl.flat_model.children[i]] = project_oc_powl(oc_powl.oc_children[i], object_type, div_edges)
+                    mapping[oc_powl.flat_model.children[i]] = project_oc_powl(
+                        oc_powl.oc_children[i], object_type, div_edges
+                    )
 
                 return oc_powl.flat_model.map_nodes(mapping)
 
             else:
-                parts = _partition_children(oc_powl, diverging, related_activities, div_edges)
+                parts = _partition_children(
+                    oc_powl, diverging, related_activities, div_edges
+                )
 
                 mapping = {}
 
                 for group in parts:
                     if len(group) == 1:
                         i = list(group)[0]
-                        mapping[oc_powl.flat_model.children[i]] = project_oc_powl(oc_powl.oc_children[i], object_type, div_edges)
+                        mapping[oc_powl.flat_model.children[i]] = project_oc_powl(
+                            oc_powl.oc_children[i], object_type, div_edges
+                        )
                     else:
-                        div_children = [project_oc_powl(oc_powl.oc_children[i], object_type, div_edges) for i in group]
+                        div_children = [
+                            project_oc_powl(
+                                oc_powl.oc_children[i], object_type, div_edges
+                            )
+                            for i in group
+                        ]
                         flower = generate_flower_model(div_children)
                         for i in group:
                             mapping[oc_powl.flat_model.children[i]] = flower
@@ -189,48 +266,74 @@ def _partition_children(oc_powl, diverging, related_activities, div_edges):
 
     return parts
 
+
 def handle_deficiency(oc_powl: ObjectCentricPOWL):
 
     if isinstance(oc_powl, LeafNode):
         if oc_powl.activity == "":
-            return oc_powl,[]
+            return oc_powl, []
         else:
-            from itertools import combinations, chain
+            from itertools import chain, combinations
+
             stable_types = oc_powl.related - oc_powl.deficient
             variable_types = oc_powl.related & oc_powl.deficient
             if variable_types:
-                ot_sets =  [stable_types | {c for c in comb} for comb in chain.from_iterable(combinations(variable_types,n)
-                                        for n in range(len(variable_types)+1))]
+                ot_sets = [
+                    stable_types | {c for c in comb}
+                    for comb in chain.from_iterable(
+                        combinations(variable_types, n)
+                        for n in range(len(variable_types) + 1)
+                    )
+                ]
 
                 mapping = {}
                 for ots in ot_sets:
-                    transition = Transition(oc_powl.activity + "<|>" + str(sorted(list(ots))))
-                    mapping[transition] = LeafNode(transition=transition, related=ots, convergent=oc_powl.convergent & ots,
-                            deficient= set(), divergent= oc_powl.divergent & ots)
+                    transition = Transition(
+                        oc_powl.activity + "<|>" + str(sorted(list(ots)))
+                    )
+                    mapping[transition] = LeafNode(
+                        transition=transition,
+                        related=ots,
+                        convergent=oc_powl.convergent & ots,
+                        deficient=set(),
+                        divergent=oc_powl.divergent & ots,
+                    )
                 flat_model = generate_xor(children=list(mapping.keys()))
-                return ComplexModel(flat_model=flat_model, mapping=mapping), [oc_powl.activity]
+                return ComplexModel(flat_model=flat_model, mapping=mapping), [
+                    oc_powl.activity
+                ]
             else:
-                return oc_powl,[]
-
+                return oc_powl, []
 
     assert isinstance(oc_powl, ComplexModel)
     sub_results = [handle_deficiency(sub) for sub in oc_powl.oc_children]
     flat_children = [child[0].flat_model for child in sub_results]
-    flat_to_oc_mapping = {flat_children[i]: sub_results[i][0] for i in range(len(sub_results))}
-    old_flat_to_new_flat_mapping = {oc_powl.flat_model.children[i]: flat_children[i] for i in range(len(oc_powl.flat_model.children))}
+    flat_to_oc_mapping = {
+        flat_children[i]: sub_results[i][0] for i in range(len(sub_results))
+    }
+    old_flat_to_new_flat_mapping = {
+        oc_powl.flat_model.children[i]: flat_children[i]
+        for i in range(len(oc_powl.flat_model.children))
+    }
 
     flat_model = oc_powl.flat_model
 
     if isinstance(flat_model, Sequence):
         new_flat_model = Sequence(flat_children)
-    elif isinstance(flat_model, StrictPartialOrder) or isinstance(flat_model, DecisionGraph):
+    elif isinstance(flat_model, StrictPartialOrder) or isinstance(
+        flat_model, DecisionGraph
+    ):
         new_flat_model = flat_model.map_nodes(old_flat_to_new_flat_mapping)
     elif isinstance(flat_model, OperatorPOWL):
-        new_flat_model = OperatorPOWL(operator=flat_model.operator, children=flat_children)
+        new_flat_model = OperatorPOWL(
+            operator=flat_model.operator, children=flat_children
+        )
     else:
         raise NotImplementedError
 
-    return ComplexModel(new_flat_model, flat_to_oc_mapping), sum([sub[1] for sub in sub_results], [])
+    return ComplexModel(new_flat_model, flat_to_oc_mapping), sum(
+        [sub[1] for sub in sub_results], []
+    )
 
 
 def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL, divergence_matrices):
@@ -244,23 +347,33 @@ def convert_ocpowl_to_ocpn(oc_powl: ObjectCentricPOWL, divergence_matrices):
     oc_powl, special_activities = handle_deficiency(oc_powl)
 
     for ot in oc_powl.get_object_types():
-        powl_model = project_oc_powl(oc_powl,ot,divergence_matrices[ot])
+        powl_model = project_oc_powl(oc_powl, ot, divergence_matrices[ot])
         powl_model = powl_model.reduce_silent_transitions(add_empty_paths=False)
         powl_model = powl_model.simplify()
         from powl.conversion.converter import apply as to_pn
+
         net, im, fm = to_pn(powl_model)
-        nets[ot] = net,im,fm
+        nets[ot] = net, im, fm
         nets_duplicates[ot] = clone_workflow_net(net, im, fm, label_delimiter="<|>")
-        activities.update({a for a in oc_powl.get_activities() if ot in oc_powl.get_type_information()[(a,"rel")]})
-        convergent_activities[ot] = {a: ot in oc_powl.get_type_information()[(a,"con")] for a in oc_powl.get_activities()}
+        activities.update(
+            {
+                a
+                for a in oc_powl.get_activities()
+                if ot in oc_powl.get_type_information()[(a, "rel")]
+            }
+        )
+        convergent_activities[ot] = {
+            a: ot in oc_powl.get_type_information()[(a, "con")]
+            for a in oc_powl.get_activities()
+        }
 
-
-    ocpn = {"activities": activities,
-            "object_types": nets.keys(),
-            "petri_nets": nets,
-            "petri_nets_with_duplicates": nets_duplicates,
-            "double_arcs_on_activity": convergent_activities,
-            "tbr_results" : {}}
+    ocpn = {
+        "activities": activities,
+        "object_types": nets.keys(),
+        "petri_nets": nets,
+        "petri_nets_with_duplicates": nets_duplicates,
+        "double_arcs_on_activity": convergent_activities,
+        "tbr_results": {},
+    }
 
     return ocpn
-
