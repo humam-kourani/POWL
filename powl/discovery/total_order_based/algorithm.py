@@ -17,7 +17,7 @@ from powl.discovery.total_order_based.inductive.variants.im_decision_graph_clust
 )
 
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_cyclic import (
-    POWLInductiveMinerDecisionGraphCyclic,
+    POWLInductiveMinerDecisionGraphCyclic, POWLInductiveMinerDecisionGraphCyclicStrict,
 )
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_maximal import (
     POWLInductiveMinerDecisionGraphMaximal,
@@ -52,6 +52,8 @@ def get_variant(variant: POWLDiscoveryVariant) -> Type[IMBasePOWL]:
         return POWLInductiveMinerDecisionGraphClustering
     elif variant == POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC:
         return POWLInductiveMinerDecisionGraphCyclic
+    elif variant == POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC_STRICT:
+        return POWLInductiveMinerDecisionGraphCyclicStrict
     else:
         raise Exception("Invalid Variant!")
 
