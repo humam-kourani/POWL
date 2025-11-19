@@ -76,6 +76,9 @@ class IMBasePOWL(ABC, Generic[T]):
     def empty_traces_cut(self) -> Type[EmptyTracesUVCL]:
         return POWLEmptyTracesUVCL
 
+    def enable_dfg_fall_through(self) -> bool:
+        return False
+
     def apply(
         self,
         obj: T,
@@ -180,7 +183,7 @@ class IMBasePOWL(ABC, Generic[T]):
         self, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Tuple[POWL, List[T]]:
         return FallThroughFactory.fall_through(
-            obj, self._pool, self._manager, parameters=parameters
+            obj, self._pool, self._manager, enable_dfg_fall_through=self.enable_dfg_fall_through(), parameters=parameters
         )
 
     def _recurse(

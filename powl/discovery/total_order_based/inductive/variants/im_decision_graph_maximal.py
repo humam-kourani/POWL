@@ -22,6 +22,9 @@ class POWLInductiveMinerDecisionGraphMaximal(IMBasePOWL):
     def empty_traces_cut(self) -> Type[EmptyTracesUVCL]:
         return POWLEmptyTracesDecisionGraphUVCL
 
+    def enable_dfg_fall_through(cls) -> bool:
+        return False
+
     def find_cut(
         self, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Optional[Tuple[POWL, List[T]]]:
