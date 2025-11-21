@@ -33,11 +33,12 @@ class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
         while changed:
             changed = False
             for (a, b), (c, d) in combinations(dfg.graph, 2):
-                if (_get_group(a) != _get_group(b)
-                        and _get_group(a) == _get_group(d)
-                        and _get_group(b) == _get_group(c)):
-                    groups = cut_util.merge_groups_based_on_activities(a, b, groups)
-                    changed = True
+                if {a, b, c, d}.issubset(alphabet):
+                    if (_get_group(a) != _get_group(b)
+                            and _get_group(a) == _get_group(d)
+                            and _get_group(b) == _get_group(c)):
+                        groups = cut_util.merge_groups_based_on_activities(a, b, groups)
+                        changed = True
 
         if len(groups) < 2:
             return None
