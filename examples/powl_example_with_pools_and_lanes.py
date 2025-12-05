@@ -4,14 +4,23 @@ import powl
 from powl.conversion.variants.to_bpmn_with_resources import (
     apply as to_bpmn_with_resources,
 )
-from powl.objects.obj import BinaryRelation, DecisionGraph, Transition
+from powl.objects.obj import (
+    BinaryRelation,
+    DecisionGraph,
+    Operator,
+    OperatorPOWL,
+    SilentTransition,
+    Transition,
+)
 
 
 def generate_process_1():
     order_coffee = Transition("Order Coffee", "Customer", "Customer")
     pay = Transition("Pay", "Customer", "Customer")
-    prepare_coffee = Transition("Prepare Coffee", "Cafe", "Barista")
+    prepare_coffee = Transition("Prepare Coffee", "Cafe", "Customer")
     serve_coffee = Transition("Serve Coffee", "Cafe", "Barista")
+    none = SilentTransition()
+    serve_coffee = OperatorPOWL(Operator.XOR, [serve_coffee, none])
     # Create decision graph
     binary_relation = BinaryRelation([order_coffee, pay, prepare_coffee, serve_coffee])
     binary_relation.add_edge(order_coffee, pay)
@@ -23,6 +32,25 @@ def generate_process_1():
     ).simplify()
     # Visualize it
     powl.view(dg)
+    bpmn = powl.convert_to_bpmn(dg)
+    from powl.visualization.bpmn.layout import layout_bpmn
+
+    bpmn_no_pool_lanes = layout_bpmn(bpmn)
+    # Export it as .bpmn with pools and lanes
+    with open("coffee_shop_process_no_pools_lanes.bpmn", "w") as f:
+        f.write(bpmn_no_pool_lanes)
+
+    bpmn_model = to_bpmn_with_resources(
+        {
+            "Order Coffee": ("Customer Pool", "Customer Lane"),
+            "Pay": ("Customer Pool", "Customer Lane"),
+            "Prepare Coffee": ("Cafe Pool", "Cafe Lane"),
+            "Serve Coffee": ("Cafe Pool", "Barista Lane"),
+        },
+        dg,
+    )
+    with open("coffee_shop_process.bpmn", "w") as f:
+        f.write(bpmn_model)
 
 
 def generate_process_2():
@@ -50,4 +78,4 @@ def generate_process_2():
 
 
 if __name__ == "__main__":
-    generate_process_1()
+    generate_process_2()

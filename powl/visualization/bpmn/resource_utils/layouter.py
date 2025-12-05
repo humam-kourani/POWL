@@ -19,6 +19,9 @@ from powl.visualization.bpmn.resource_utils.lanes import Lane
 
 from powl.visualization.bpmn.resource_utils.pools import Pool
 
+PADDING_LANES = 20
+PADDING_POOLS = 50
+
 
 class DockingDirection(Enum):
     """
@@ -93,7 +96,11 @@ def __pools_to_tasks(
 
 
 def __color_subgraph(
-    graph: nx.DiGraph, start_node: str, end_node: str, coloring: Dict[str, str]
+    graph: nx.DiGraph,
+    start_node: str,
+    end_node: str,
+    coloring: Dict[str, str],
+    main_color: str,
 ) -> nx.DiGraph:
     """
     Generate a subgraph from start_node to end_node.
@@ -108,7 +115,6 @@ def __color_subgraph(
     subgraph = graph.subgraph(nodes_in_subgraph).copy()
     # Check if all of the colored nodes have the same color
     used_colors = [coloring[node] for node in subgraph.nodes if node in coloring]
-
     if len(set(used_colors)) == 1:
         # Color all nodes in the subgraph with the same color
         color = used_colors[0]
@@ -117,11 +123,10 @@ def __color_subgraph(
 
     else:
         # If there are multiple colors/no colors, we fall back to the default coloring
-        default_color = coloring.default_factory()
         for node in subgraph.nodes:
             if node not in coloring:
                 # If the node is not colored, assign it the default color
-                coloring[node] = default_color
+                coloring[node] = main_color
     return coloring
 
 
@@ -134,7 +139,7 @@ def color_graph(graph: nx.DiGraph, pools: Dict[str, List]) -> List[Tuple[str, st
     :return: A list of tuples with node id and color.
     """
     pool_with_most_tasks = max(pools, key=lambda k: len(pools[k]))
-    coloring = defaultdict(lambda: pool_with_most_tasks)
+    coloring = {}
     for pool, tasks in pools.items():
         # identify the node with this content
         for task in tasks:
@@ -152,31 +157,43 @@ def color_graph(graph: nx.DiGraph, pools: Dict[str, List]) -> List[Tuple[str, st
     for node in graph.nodes:
         if node not in coloring.keys():
             if graph.nodes[node].get("type") == "diverging":
-                # find its counterpart
+
                 counterparts = graph.nodes[node].get("paired_with")
-                for counterpart in counterparts:
-                    if counterpart not in coloring.keys():
-                        coloring = __color_subgraph(graph, node, counterpart, coloring)
+                if counterparts is not None:
+                    for counterpart in counterparts:
+                        if (
+                            counterpart not in coloring.keys()
+                            and counterpart in graph.nodes
+                        ):
+                            coloring = __color_subgraph(
+                                graph, node, counterpart, coloring, pool_with_most_tasks
+                            )
+                else:
+                    raise Exception(f"No counterparts found for diverging node {node}")
     for node in graph.nodes:
         if node not in coloring.keys():
             if graph.nodes[node].get("type") == "startEvent":
                 # Get the color of the successor
                 successors = list(graph.successors(node))
-                for successor in successors:
-                    if successor in coloring.keys():
-                        coloring[node] = coloring[successor]
+                while successors:
+                    current_element = successors.pop(0)
+                    if current_element in coloring.keys():
+                        coloring[node] = coloring[current_element]
                         break
-                if node not in coloring.keys():
-                    coloring[node] = pool_with_most_tasks
+                    # otherwise, add its successors to the list
+                    for succ in graph.successors(current_element):
+                        successors.append(succ)
             elif graph.nodes[node].get("type") == "endEvent":
                 # Get the color of the predecessor
                 predecessors = list(graph.predecessors(node))
-                for predecessor in predecessors:
-                    if predecessor in coloring.keys():
-                        coloring[node] = coloring[predecessor]
+                while predecessors:
+                    current_element = predecessors.pop(0)
+                    if current_element in coloring.keys():
+                        coloring[node] = coloring[current_element]
                         break
-                if node not in coloring.keys():
-                    coloring[node] = pool_with_most_tasks
+                    # otherwise, add its predecessors to the list
+                    for pred in graph.predecessors(current_element):
+                        predecessors.append(pred)
             else:
                 coloring[node] = pool_with_most_tasks
 
@@ -459,7 +476,6 @@ def order_lanes_and_pools(
                 lane_data[lane].append(activity)
         ordered_lanes = __order_structures(lane_data, task_name_to_id, root)
         resulting_pool_lane_order[pool] = ordered_lanes
-    print(f"Ordered pools and lanes: {resulting_pool_lane_order}")
     return resulting_pool_lane_order
 
 
@@ -473,7 +489,6 @@ def construct_pools(
     """
     This function takes the xml output and the pool data and constructs a list of Pool objects accordingly.
     """
-    print(f"Model dimensions: {model_dimensions}")
     lane_width, lane_height, lane_padding = (
         model_dimensions[0],
         model_dimensions[1],
@@ -578,7 +593,6 @@ def __edit_element_coordinates(
         # Attribute values must be strings.
         bounds_element.set("x", str(new_x))
         bounds_element.set("y", str(new_y))
-        print(f"Successfully updated coordinates for element '{element_id}'.")
     else:
         raise Exception(
             f"Element with id '{element_id}' not found in the XML. No changes made."
@@ -720,8 +734,8 @@ def __check_for_path_intersection(
             return True
 
     # Check if the intersection with the source and target is a point
-    intersection_with_src = shapely.intersection(path, source_shape)
-    intersection_with_tgt = shapely.intersection(path, target_shape)
+    intersection_with_src = shapely.intersection(path, source_shape.buffer(-0.01))
+    intersection_with_tgt = shapely.intersection(path, target_shape.buffer(-0.01))
     if intersection_with_src.is_empty and intersection_with_tgt.is_empty:
         return False
     elif isinstance(intersection_with_src, shapely.geometry.Point) and isinstance(
@@ -789,7 +803,7 @@ def __construct_c_shaped_flow(
     offset,
 ) -> List[Tuple[float, float]]:
     pathways = []
-    variable_offset = [0, 5, 10, 15, 20, 25]
+    variable_offset = [2, 4, 5, 10, 15, 20, 25]
     if docking_pt_src == docking_pt_tgt:
         if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
             # C-shaped curvature with vertical
@@ -835,11 +849,13 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set([docking_pt_src, docking_pt_tgt])
     pathways = []
+    """
     pathways.extend(
         __construct_c_shaped_flow(
             path_start, path_end, docking_pt_src, docking_pt_tgt, offset
         )
     )
+    """
     pathways.extend(
         __construct_s_shaped_flow(path_start, path_end, docking_pt_src, docking_pt_tgt)
     )
@@ -902,12 +918,69 @@ def __turn_points_into_multi_linestring(
 def __check_for_flow_connectivity(
     current_path: List, prev_paths: List[List[Tuple[float, float]]]
 ) -> bool:
-    outgoing_docking_points = [path[0] for path in prev_paths]
     incoming_docking_points = [path[-1] for path in prev_paths]
+    outgoing_docking_points = [path[0] for path in prev_paths]
     return (
         current_path[0] in incoming_docking_points
         or current_path[-1] in outgoing_docking_points
     )
+
+
+def __prioritize_paths(paths: List, source, target) -> List:
+    dx = __get_midway_point(target)[0] - __get_midway_point(source)[0]
+    dy = __get_midway_point(target)[1] - __get_midway_point(source)[1]
+
+    best_start = None
+    if abs(dy) > abs(dx):
+        # Vertical movement is dominant
+        best_start = DockingDirection.BOTTOM if dy > 0 else DockingDirection.TOP
+    elif abs(dx) > abs(dy):
+        best_start = DockingDirection.RIGHT if dx > 0 else DockingDirection.LEFT
+    else:
+        # Prioritize vertical movement
+        best_start = DockingDirection.BOTTOM if dy > 0 else DockingDirection.TOP
+
+    def get_score(path):
+
+        # Visual complexity - number of turns
+        used_docking_points = not path[1]
+        total_path_intersection = path[2]
+        num_turns = len(path[0])
+
+        # Check misalignment
+        actual_start = __get_docking_point_name(path[0][0], source)
+        is_misaligned = actual_start != best_start
+
+        # Total path Length (Manhattan distance)
+        length = 0
+        for i in range(len(path[0]) - 1):
+            length += abs(path[0][i][0] - path[0][i + 1][0]) + abs(
+                path[0][i][1] - path[0][i + 1][1]
+            )
+
+        return (
+            num_turns,
+            total_path_intersection,
+            used_docking_points,
+            is_misaligned,
+            length,
+        )
+
+    return sorted(paths, key=get_score)
+
+
+def __check_for_intersection_with_other_paths(
+    current_path: shapely.MultiLineString,
+    prev_paths: List[List[Tuple[float, float]]],
+):
+    # Should return a float with total intersection length
+    total_intersection_length = 0.0
+    for path in prev_paths:
+        other_path = __turn_points_into_multi_linestring(path)
+        intersection = current_path.intersection(other_path)
+        if not intersection.is_empty:
+            total_intersection_length += intersection.length
+    return total_intersection_length
 
 
 def __construct_possible_paths(
@@ -965,17 +1038,21 @@ def __construct_possible_paths(
                 multilane_path, remaining_shapes, source_shape, target_shape
             ):
                 # If it does not intersect, we can add it to the list
+
                 possible_full_paths.append(
                     (
                         constructed_path,
                         __check_for_flow_connectivity(constructed_path, prev_paths),
+                        __check_for_intersection_with_other_paths(
+                            multilane_path, prev_paths
+                        ),
                     )
                 )
 
     if len(possible_full_paths) != 0:
         # First, sort them by the boolean argument, then by length of the path
-        possible_full_paths = sorted(
-            possible_full_paths, key=lambda x: (x[1], len(x[0]))
+        possible_full_paths = __prioritize_paths(
+            possible_full_paths, source_coords, target_coords
         )
         return possible_full_paths[0][0]
     print("No suitable path found, returning backup path")
@@ -991,8 +1068,6 @@ def connect_points(
     """
     This function takes the source and target shapes and returns the docking point
     """
-    # Check the direction of the flow
-    __find_location_of_flow(source_coords, target_coords)
     possible_directions = [
         DockingDirection.LEFT,
         DockingDirection.RIGHT,
@@ -1053,6 +1128,22 @@ def __handle_sequence_flows(root: etree._Element, shapes: List[object]):
     # Get rid of previous sequence flows so we can add the new ones w/o any issues
     prev_paths = []
     message_flows = []
+    # sort the connection dict based on the following heuristic
+    # First, try to connect gateways with gateways, then tasks with tasks, then events with events, then the rest
+    connections_dict = dict(
+        sorted(
+            connections_dict.items(),
+            key=lambda item: (
+                0
+                if "Gateway" in item[1][0] and "Gateway" in item[1][1]
+                else 1
+                if "Task" in item[1][0] and "Task" in item[1][1]
+                else 2
+                if ("Event" in item[1][0] and "Event" in item[1][1])
+                else 3
+            ),
+        )
+    )
     for seq_flow, (source, target) in connections_dict.items():
         src_coords = __get_element_coordinates(root, source)
         tgt_coords = __get_element_coordinates(root, target)
@@ -1074,10 +1165,8 @@ def __align_tasks(
         # get the up left and down right coordinates of the lane
         up_left = lane.get_up_left()
         activities = lane.get_activities()
-        print(f"Aligning tasks in lane {lane.get_name()} with activities {activities}")
         for activity in activities:
             # get the id of the activity
-            print(f"Aligning activity {activity} in lane {lane.get_name()}")
             id_activity = task_dict[activity]
             aligned_elements.append(id_activity)
             lane.add_element(id_activity)
@@ -1241,7 +1330,7 @@ def __align_events(
         )
         if nearest_pool_element is not None:
             # Get the coordinates of the nearest element
-            nearest_coordinates = __get_element_coordinates(root, nearest_pool_element)
+            __get_element_coordinates(root, nearest_pool_element)
             # Get the lane of the nearest element
             nearest_y, corresponding_lane = __get_y_coordinates_for_alignment(
                 nearest_pool_element, root, lanes
@@ -1252,9 +1341,6 @@ def __align_events(
             )
             root = __edit_element_coordinates(
                 root, el_id, (current_element_coordinates[0], y_coordinate)
-            )
-            print(
-                f"Nearest element {nearest_pool_element} has coordinates {nearest_coordinates} and y-coordinate {nearest_y}"
             )
             corresponding_lane.add_element(el_id)
             if el_id not in aligned_elements:
@@ -1502,3 +1588,66 @@ def create_visual_shape(
 
     # Create the <omgdc:Bounds> element inside the shape
     etree.SubElement(shape, f"{{{OMGDC_NS}}}Bounds", attrib=bounds_attributes)
+
+
+def postprocess_diagram(root: etree._Element, pools: List[Pool]) -> etree._Element:
+    current_y_cursor = None
+    for pool in pools:
+        current_y_cursor = (
+            pool.get_up_left()[1]
+            if current_y_cursor is None
+            else min(current_y_cursor, pool.get_up_left()[1])
+        )
+        if current_y_cursor != pool.get_up_left()[1]:
+            # Update pool position
+            pool.set_up_left((pool.get_up_left()[0], current_y_cursor))
+
+        lanes = pool.get_lanes()
+        lanes.sort(key=lambda l: l.get_up_left()[1])
+
+        for lane in lanes:
+            elements_in_lane = lane.get_elements()
+
+            # 1. Find the bounding box of the elements currently in this lane
+            current_elements_coords = {}
+            for element_id in elements_in_lane:
+                coords = __get_element_coordinates(root, element_id)
+                if coords:
+                    # x, y, width, height
+                    current_elements_coords[element_id] = coords
+
+            if not current_elements_coords:
+                raise ValueError(
+                    f"No elements found in lane '{lane.get_name()}' for alignment."
+                )
+
+            # Calculate content height
+            min_ele_y = min(c[1] for c in current_elements_coords.values())
+            max_ele_y = max(c[1] + c[3] for c in current_elements_coords.values())
+            content_height = max_ele_y - min_ele_y
+
+            # 2. Calculate how much we need to shift these elements to sit at current_y_cursor + PADDING
+            # We want the top-most element to be at (current_y_cursor + PADDING)
+            target_top_y = current_y_cursor + PADDING_LANES
+            shift_amount = target_top_y - min_ele_y
+
+            # 3. Apply shift to all elements in this lane
+            for element_id, (x, y, w, h) in current_elements_coords.items():
+                new_y = y + shift_amount
+                root = __edit_element_coordinates(root, element_id, (x, new_y))
+
+            # 4. Resize the Lane
+            new_lane_height = content_height + (PADDING_LANES * 2)
+            lane.set_up_left((lane.get_up_left()[0], current_y_cursor))
+            lane.set_down_right(
+                (lane.get_down_right()[0], current_y_cursor + new_lane_height)
+            )
+
+            # 5. Move cursor down for the next lane
+            current_y_cursor += new_lane_height
+
+        # 6. Finally, resize the Pool to fit the stacked lanes
+        pool.set_down_right((pool.get_down_right()[0], current_y_cursor))
+        current_y_cursor += PADDING_POOLS  # Add pool padding after all lanes
+
+    return root
