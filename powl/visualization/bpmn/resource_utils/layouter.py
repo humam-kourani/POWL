@@ -849,13 +849,13 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set([docking_pt_src, docking_pt_tgt])
     pathways = []
-    """
+    
     pathways.extend(
         __construct_c_shaped_flow(
             path_start, path_end, docking_pt_src, docking_pt_tgt, offset
         )
     )
-    """
+
     pathways.extend(
         __construct_s_shaped_flow(path_start, path_end, docking_pt_src, docking_pt_tgt)
     )
