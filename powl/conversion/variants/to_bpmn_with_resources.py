@@ -58,12 +58,13 @@ def apply(activity_to_pool_lane: dict[str, tuple[str, str]], powl) -> str:
     )
     lanes = [pool.get_lanes() for pool in pools]
     lanes = [lane for sublist in lanes for lane in sublist]  # Flatten
-    print(f"Constructed pools and lanes: {pools}, {lanes}")
     task_name_to_id = {k: v for k, v in task_name_to_id.items() if k != ""}
-    print(f"Task name to ID mapping: {task_name_to_id}")
     bpmn, aligned_elements = utils.__align_tasks(lanes, bpmn, task_name_to_id)
     bpmn = utils.__align_elements(bpmn, coloring, aligned_elements, lanes)
+    # bpmn = utils.__postprocess_pools(pools, bpmn)
+    bpmn = utils.postprocess_diagram(bpmn, pools=pools)
     shapes = utils.__create_shapes(aligned_elements, bpmn)
+
     # Handle the sequence flows
     bpmn, msg_flows = utils.__handle_sequence_flows(bpmn, shapes)
     bpmn = utils.build_pools_with_collaboration(bpmn, pools, msg_flows)

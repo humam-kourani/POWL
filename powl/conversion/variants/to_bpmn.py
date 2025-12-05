@@ -95,6 +95,18 @@ def __handle_operator_powl(powl_content: OperatorPOWL) -> nx.DiGraph:
         # One exclusive choice gateway
         exclusive_gateway_diverging = f"ExclusiveGateway_{id(powl_content)}_diverging"
         exclusive_gateway_converging = f"ExclusiveGateway_{id(powl_content)}_converging"
+        G.add_node(
+            exclusive_gateway_diverging,
+            type="diverging",
+            paired_with=[exclusive_gateway_converging],
+            visited=True,
+        )
+        G.add_node(
+            exclusive_gateway_converging,
+            type="converging",
+            paired_with=[exclusive_gateway_diverging],
+            visited=True,
+        )
         G.add_edge(start_event, exclusive_gateway_diverging)
         G.add_edge(exclusive_gateway_converging, end_event)
 
