@@ -136,11 +136,18 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
 
         logs = [Counter() for _ in groups]
 
-        for t in obj.data_structure:
+        for t, freq in obj.data_structure.items():
             for i, group in enumerate(groups):
-                proj = tuple(e for e in t if e in group)
-                if proj:
-                    logs[i].update({proj: obj.data_structure[t]})
+                seg = []
+                for e in t:
+                    if e in group:
+                        seg.append(e)
+                    else:
+                        if len(seg) > 0:
+                            logs[i][tuple(seg)] += freq
+                            seg = []
+                if len(seg) > 0:
+                    logs[i][tuple(seg)] += freq
 
         return [IMDataStructureUVCL(l) for l in logs]
 

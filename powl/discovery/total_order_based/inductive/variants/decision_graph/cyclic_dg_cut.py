@@ -9,7 +9,7 @@ from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 
 from powl.discovery.total_order_based.inductive.variants.decision_graph.max_decision_graph_cut import (
-    MaximalDecisionGraphCut,
+    MaximalDecisionGraphCut, MaximalDecisionGraphCutUVCL,
 )
 
 
@@ -43,19 +43,4 @@ class CyclicDecisionGraphCutUVCL(CyclicDecisionGraphCut[IMDataStructureUVCL], AB
         parameters: Optional[Dict[str, Any]] = None,
     ) -> List[IMDataStructureUVCL]:
 
-        logs = [Counter() for _ in groups]
-
-        for t, freq in obj.data_structure.items():
-            for i, group in enumerate(groups):
-                seg = []
-                for e in t:
-                    if e in group:
-                        seg.append(e)
-                    else:
-                        if len(seg) > 0:
-                            logs[i][tuple(seg)] += freq
-                            seg = []
-                if len(seg) > 0:
-                    logs[i][tuple(seg)] += freq
-
-        return [IMDataStructureUVCL(l) for l in logs]
+        return MaximalDecisionGraphCutUVCL.project(obj, groups, parameters)
