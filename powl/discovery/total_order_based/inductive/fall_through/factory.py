@@ -14,6 +14,7 @@ from powl.discovery.total_order_based.inductive.fall_through.activity_concurrent
 from powl.discovery.total_order_based.inductive.fall_through.activity_once_per_trace import (
     POWLActivityOncePerTraceUVCL,
 )
+from powl.discovery.total_order_based.inductive.fall_through.decision_graph.dfg_fall_through import DFGFallThroughUVCL
 from powl.discovery.total_order_based.inductive.fall_through.flower import (
     POWLFlowerModelDFG,
     POWLFlowerModelUVCL,
@@ -24,25 +25,34 @@ from powl.discovery.total_order_based.inductive.fall_through.strict_tau_loop imp
 from powl.discovery.total_order_based.inductive.fall_through.tau_loop import (
     POWLTauLoopUVCL,
 )
+from pm4py.algo.discovery.inductive.cuts.abc import Cut, T
 from powl.objects.obj import POWL
 
-T = TypeVar("T", bound=IMDataStructure)
-S = TypeVar("S", bound=FallThrough)
+S = TypeVar("S", bound=FallThrough|Cut)
 
 
 class FallThroughFactory:
     @classmethod
     def get_fall_throughs(
-        cls, obj: T, parameters: Optional[Dict[str, Any]] = None
+        cls, obj: T, enable_dfg_fall_through, parameters: Optional[Dict[str, Any]] = None
     ) -> List[Type[S]]:
         if type(obj) is IMDataStructureUVCL:
-            return [
-                POWLActivityOncePerTraceUVCL,
-                POWLActivityConcurrentUVCL,
-                POWLStrictTauLoopUVCL,
-                POWLTauLoopUVCL,
-                POWLFlowerModelUVCL,
-            ]
+            if enable_dfg_fall_through:
+                return [
+                    POWLActivityOncePerTraceUVCL,
+                    POWLActivityConcurrentUVCL,
+                    POWLStrictTauLoopUVCL,
+                    POWLTauLoopUVCL,
+                    DFGFallThroughUVCL
+                ]
+            else:
+                return [
+                    POWLActivityOncePerTraceUVCL,
+                    POWLActivityConcurrentUVCL,
+                    POWLStrictTauLoopUVCL,
+                    POWLTauLoopUVCL,
+                    POWLFlowerModelUVCL,
+                ]
         elif type(obj) is IMDataStructureDFG:
             return [POWLFlowerModelDFG]
         return list()
@@ -53,9 +63,10 @@ class FallThroughFactory:
         obj: T,
         pool: Pool,
         manager: Manager,
+        enable_dfg_fall_through,
         parameters: Optional[Dict[str, Any]] = None,
     ) -> Optional[Tuple[POWL, List[T]]]:
-        for f in FallThroughFactory.get_fall_throughs(obj):
+        for f in FallThroughFactory.get_fall_throughs(obj, enable_dfg_fall_through):
             r = f.apply(obj, pool, manager, parameters)
             if r is not None:
                 return r
