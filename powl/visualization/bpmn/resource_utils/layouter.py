@@ -19,7 +19,7 @@ from powl.visualization.bpmn.resource_utils.lanes import Lane
 
 from powl.visualization.bpmn.resource_utils.pools import Pool
 
-PADDING_LANES = 20
+PADDING_LANES = 30
 PADDING_POOLS = 50
 
 
@@ -734,8 +734,8 @@ def __check_for_path_intersection(
             return True
 
     # Check if the intersection with the source and target is a point
-    intersection_with_src = shapely.intersection(path, source_shape.buffer(-0.01))
-    intersection_with_tgt = shapely.intersection(path, target_shape.buffer(-0.01))
+    intersection_with_src = shapely.intersection(path, source_shape.buffer(-0.05))
+    intersection_with_tgt = shapely.intersection(path, target_shape.buffer(-0.05))
     if intersection_with_src.is_empty and intersection_with_tgt.is_empty:
         return False
     elif isinstance(intersection_with_src, shapely.geometry.Point) and isinstance(
@@ -803,7 +803,7 @@ def __construct_c_shaped_flow(
     offset,
 ) -> List[Tuple[float, float]]:
     pathways = []
-    variable_offset = [2, 4, 5, 10, 15, 20, 25]
+    variable_offset = [10, 15, 20]
     if docking_pt_src == docking_pt_tgt:
         if docking_pt_src in {DockingDirection.LEFT, DockingDirection.RIGHT}:
             # C-shaped curvature with vertical
@@ -849,20 +849,27 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set([docking_pt_src, docking_pt_tgt])
     pathways = []
+
+    if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
+        # Base case, just return none twice
+        # Allow it only in case LEFT-RIGHT or TOP-BOTTOM docking
+        docking_pts = {docking_pt_src, docking_pt_tgt}
+        if docking_pts == {DockingDirection.LEFT, DockingDirection.RIGHT} \
+            or docking_pts == {DockingDirection.TOP, DockingDirection.BOTTOM} \
+            and docking_pt_src != docking_pt_tgt:
+            pathways.append([None, None])
+
     
     pathways.extend(
         __construct_c_shaped_flow(
             path_start, path_end, docking_pt_src, docking_pt_tgt, offset
         )
     )
-
+    
     pathways.extend(
         __construct_s_shaped_flow(path_start, path_end, docking_pt_src, docking_pt_tgt)
     )
 
-    if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
-        # Base case, just return none twice
-        pathways.append([None, None])
 
     if docking_pt_src in {
         DockingDirection.BOTTOM,
@@ -959,11 +966,12 @@ def __prioritize_paths(paths: List, source, target) -> List:
             )
 
         return (
-            num_turns,
-            total_path_intersection,
-            used_docking_points,
-            is_misaligned,
-            length,
+            used_docking_points, # Should use docking points that are not used for other paths in the other direction
+            total_path_intersection, # Should have minimal intersection with other paths
+            num_turns, # Should be simple
+            is_misaligned, # Should be from optimal side
+            length # Should be short
+
         )
 
     return sorted(paths, key=get_score)
@@ -1059,6 +1067,81 @@ def __construct_possible_paths(
     return backup_path
 
 
+def __construct_possible_directions(flow : str) -> Tuple[List[DockingDirection], List[DockingDirection]]:
+    if flow == "r" or flow == "l":
+
+        possible_directions_1 = [
+            DockingDirection.RIGHT,
+            DockingDirection.TOP,
+            DockingDirection.BOTTOM,
+        ]
+        possible_directions_2 = [
+            DockingDirection.LEFT,
+            DockingDirection.TOP,
+            DockingDirection.BOTTOM,
+        ]
+        if flow == "r": 
+            possible_directions_src = possible_directions_1
+            possible_directions_tgt = possible_directions_2
+        else:
+            possible_directions_src = possible_directions_2
+            possible_directions_tgt = possible_directions_1
+    elif flow == "u" or flow == "d":
+        possible_directions_1 = [
+            DockingDirection.TOP,
+            DockingDirection.LEFT,
+            DockingDirection.RIGHT,
+        ]
+        possible_directions_2 = [
+            DockingDirection.BOTTOM,
+            DockingDirection.LEFT,
+            DockingDirection.RIGHT,
+        ]
+        if flow == "u": 
+            possible_directions_src = possible_directions_1
+            possible_directions_tgt = possible_directions_2
+        else:
+            possible_directions_src = possible_directions_2
+            possible_directions_tgt = possible_directions_1
+    elif flow == "ru" or flow == "ur":
+        possible_directions_src = [
+            DockingDirection.RIGHT,
+            DockingDirection.TOP,
+        ]
+        possible_directions_tgt = [
+            DockingDirection.LEFT,
+            DockingDirection.BOTTOM,
+        ]
+    elif flow == "rd" or flow == "dr":
+        possible_directions_src = [
+            DockingDirection.RIGHT,
+            DockingDirection.BOTTOM,
+        ]
+        possible_directions_tgt = [
+            DockingDirection.LEFT,
+            DockingDirection.TOP,
+        ]
+    elif flow == "lu" or flow == "ul":
+        possible_directions_src = [
+            DockingDirection.LEFT,
+            DockingDirection.TOP,
+        ]
+        possible_directions_tgt = [
+            DockingDirection.RIGHT,
+            DockingDirection.BOTTOM,
+        ]
+    elif flow == "ld" or flow == "dl":
+        possible_directions_src = [
+            DockingDirection.LEFT,
+            DockingDirection.BOTTOM,
+        ]
+        possible_directions_tgt = [
+            DockingDirection.RIGHT,
+            DockingDirection.TOP,
+        ]
+
+    return possible_directions_src, possible_directions_tgt
+
 def connect_points(
     source_coords,
     target_coords,
@@ -1068,21 +1151,8 @@ def connect_points(
     """
     This function takes the source and target shapes and returns the docking point
     """
-    possible_directions = [
-        DockingDirection.LEFT,
-        DockingDirection.RIGHT,
-        DockingDirection.TOP,
-        DockingDirection.BOTTOM,
-    ]
-    possible_docking_points_src = [
-        __get_docking_point(source_coords, direction)
-        for direction in possible_directions
-    ]
-    possible_docking_points_tgt = [
-        __get_docking_point(target_coords, direction)
-        for direction in possible_directions
-    ]
-
+    flow = __find_location_of_flow(source_coords, target_coords)
+    possible_docking_points_src, possible_docking_points_tgt = __construct_possible_directions(flow)
     path = __construct_possible_paths(
         possible_docking_points_src,
         possible_docking_points_tgt,
