@@ -1,7 +1,5 @@
 import os
 from abc import ABC
-
-from copy import copy
 from enum import Enum
 from itertools import combinations
 from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
@@ -9,7 +7,6 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 from pm4py.algo.discovery.inductive.fall_through.empty_traces import EmptyTracesUVCL
 from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
-from pm4py.objects.dfg.obj import DFG
 from pm4py.objects.process_tree.obj import Operator
 from pm4py.util import constants, exec_utils
 
@@ -31,8 +28,8 @@ from powl.discovery.total_order_based.inductive.utils.filtering import (
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import (
     POWLDiscoveryVariant,
 )
+from powl.general_utils.dfg_frequency_filtering import filter_dfg_noise_keep_activities_and_repair
 from powl.objects.BinaryRelation import BinaryRelation
-
 from powl.objects.obj import (
     DecisionGraph,
     OperatorPOWL,
@@ -40,7 +37,6 @@ from powl.objects.obj import (
     Sequence,
     StrictPartialOrder,
 )
-
 
 T = TypeVar("T", bound=IMDataStructureUVCL)
 
@@ -86,10 +82,6 @@ class IMBasePOWL(ABC, Generic[T]):
         second_iteration: bool = False,
     ) -> POWL:
 
-        # empty_traces = self.empty_traces_cut().apply(obj, parameters)
-        # if empty_traces is not None:
-        #     return self._recurse(empty_traces[0], empty_traces[1], parameters)
-
         noise_threshold = exec_utils.get_param_value(
             IMFParameters.NOISE_THRESHOLD, parameters, 0.0
         )
@@ -130,7 +122,7 @@ class IMBasePOWL(ABC, Generic[T]):
                     noise_threshold = exec_utils.get_param_value(
                         IMFParameters.NOISE_THRESHOLD, parameters, 0.0
                     )
-                    filtered_ds = self.__filter_dfg_noise(obj, noise_threshold)
+                    filtered_ds = filter_dfg_noise_keep_activities_and_repair(obj, noise_threshold)
                     tree = self.apply(
                         filtered_ds, parameters=parameters, second_iteration=True
                     )
@@ -229,36 +221,3 @@ class IMBasePOWL(ABC, Generic[T]):
             return powl
         else:
             raise Exception("Unsupported POWL type!")
-
-    def __filter_dfg_noise(self, obj, noise_threshold):
-        start_activities = copy(obj.dfg.start_activities)
-        end_activities = copy(obj.dfg.end_activities)
-        dfg = copy(obj.dfg.graph)
-        outgoing_max_occ = {}
-        for x, y in dfg.items():
-            act = x[0]
-            if act not in outgoing_max_occ:
-                outgoing_max_occ[act] = y
-            else:
-                outgoing_max_occ[act] = max(y, outgoing_max_occ[act])
-            if act in end_activities:
-                outgoing_max_occ[act] = max(outgoing_max_occ[act], end_activities[act])
-        dfg_list = sorted(
-            [(x, y) for x, y in dfg.items()], key=lambda x: (x[1], x[0]), reverse=True
-        )
-        dfg_list = [
-            x for x in dfg_list if x[1] > noise_threshold * outgoing_max_occ[x[0][0]]
-        ]
-        dfg_list = [x[0] for x in dfg_list]
-        # filter the elements in the DFG
-        graph = {x: y for x, y in dfg.items() if x in dfg_list}
-
-        dfg = DFG()
-        for sa in start_activities:
-            dfg.start_activities[sa] = start_activities[sa]
-        for ea in end_activities:
-            dfg.end_activities[ea] = end_activities[ea]
-        for act in graph:
-            dfg.graph[act] = graph[act]
-
-        return IMDataStructureUVCL(obj.data_structure, dfg)
