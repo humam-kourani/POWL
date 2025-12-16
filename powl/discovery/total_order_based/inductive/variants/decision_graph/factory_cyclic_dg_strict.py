@@ -12,8 +12,9 @@ from powl.discovery.total_order_based.inductive.cuts.concurrency import (
 )
 from powl.discovery.total_order_based.inductive.cuts.factory import CutFactory, T
 from powl.discovery.total_order_based.inductive.cuts.loop import POWLLoopCutUVCL
-from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut_strict import \
-    StrictCyclicDecisionGraphCutUVCL
+from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut_strict import (
+    StrictCyclicDecisionGraphCutUVCL,
+)
 from powl.discovery.total_order_based.inductive.variants.maximal.maximal_partial_order_cut import (
     MaximalPartialOrderCutUVCL,
 )

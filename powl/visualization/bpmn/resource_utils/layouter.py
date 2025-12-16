@@ -19,8 +19,8 @@ from powl.visualization.bpmn.resource_utils.lanes import Lane
 
 from powl.visualization.bpmn.resource_utils.pools import Pool
 
-PADDING_LANES = 30
-PADDING_POOLS = 50
+PADDING_LANES = 50
+PADDING_POOLS = 60
 
 
 class DockingDirection(Enum):
@@ -32,6 +32,17 @@ class DockingDirection(Enum):
     RIGHT = "r"
     TOP = "t"
     BOTTOM = "b"
+
+
+def __get_gateway_type(G, node):
+    predecessors = list(G.predecessors(node))
+    successors = list(G.successors(node))
+    if len(predecessors) > len(successors):
+        return "converging"
+    elif len(predecessors) < len(successors):
+        return "diverging"
+    else:
+        return "mixed"
 
 
 def apply_layouting(content_diagram: str) -> str:
@@ -113,21 +124,39 @@ def __color_subgraph(
     list_of_paths = list(nx.all_simple_paths(graph, source=start_node, target=end_node))
     nodes_in_subgraph = set([node for path in list_of_paths for node in path])
     subgraph = graph.subgraph(nodes_in_subgraph).copy()
-    # Check if all of the colored nodes have the same color
-    used_colors = [coloring[node] for node in subgraph.nodes if node in coloring]
+    # Check for all tasks included there
+    used_colors = [
+        coloring[node]
+        for node in subgraph.nodes
+        if node in coloring and graph.nodes[node].get("content") is not None
+    ]
+    """    print('--- Coloring Subgraph ---')
+        print(f"The subgraph nodes between {start_node} and {end_node} are: {nodes_in_subgraph}")
+        print(f"The used colors are: {set(used_colors)}")
+    """
     if len(set(used_colors)) == 1:
         # Color all nodes in the subgraph with the same color
         color = used_colors[0]
         for node in subgraph.nodes:
             coloring[node] = color
 
-    else:
-        # If there are multiple colors/no colors, we fall back to the default coloring
-        for node in subgraph.nodes:
-            if node not in coloring:
-                # If the node is not colored, assign it the default color
-                coloring[node] = main_color
     return coloring
+
+
+def __get_predecessors_color(G, node, coloring):
+    predecessors = list(G.predecessors(node))
+    for predecessor in predecessors:
+        if predecessor in coloring:
+            return coloring[predecessor]
+    return None
+
+
+def __get_successors_color(G, node, coloring):
+    successors = list(G.successors(node))
+    for successor in successors:
+        if successor in coloring:
+            return coloring[successor]
+    return None
 
 
 def color_graph(graph: nx.DiGraph, pools: Dict[str, List]) -> List[Tuple[str, str]]:
@@ -155,21 +184,34 @@ def color_graph(graph: nx.DiGraph, pools: Dict[str, List]) -> List[Tuple[str, st
                 # color the node with the pool name
                 coloring[node_for_task] = pool
     for node in graph.nodes:
+        counterparts = graph.nodes[node].get("paired_with")
+        counterparts = (
+            [counterpart for counterpart in counterparts if counterpart in graph.nodes]
+            if counterparts
+            else []
+        )
+        if graph.nodes[node].get("type") == "diverging":
+            counterparts = graph.nodes[node].get("paired_with")
+            for counterpart in counterparts:
+                if counterpart in graph.nodes:
+                    coloring = __color_subgraph(
+                        graph, node, counterpart, coloring, pool_with_most_tasks
+                    )
+    for node in graph.nodes:
         if node not in coloring.keys():
-            if graph.nodes[node].get("type") == "diverging":
-
-                counterparts = graph.nodes[node].get("paired_with")
-                if counterparts is not None:
-                    for counterpart in counterparts:
-                        if (
-                            counterpart not in coloring.keys()
-                            and counterpart in graph.nodes
-                        ):
-                            coloring = __color_subgraph(
-                                graph, node, counterpart, coloring, pool_with_most_tasks
-                            )
-                else:
-                    raise Exception(f"No counterparts found for diverging node {node}")
+            if "Gateway" in node:
+                # get its type
+                gateway_type = __get_gateway_type(graph, node)
+                if gateway_type == "converging":
+                    color = __get_predecessors_color(graph, node, coloring)
+                    if color:
+                        coloring[node] = color
+                elif gateway_type == "diverging":
+                    color = __get_successors_color(graph, node, coloring)
+                    if color:
+                        coloring[node] = color
+                if node not in coloring.keys():
+                    coloring[node] = pool_with_most_tasks
     for node in graph.nodes:
         if node not in coloring.keys():
             if graph.nodes[node].get("type") == "startEvent":
@@ -194,8 +236,6 @@ def color_graph(graph: nx.DiGraph, pools: Dict[str, List]) -> List[Tuple[str, st
                     # otherwise, add its predecessors to the list
                     for pred in graph.predecessors(current_element):
                         predecessors.append(pred)
-            else:
-                coloring[node] = pool_with_most_tasks
 
     return dict(coloring)
 
@@ -566,7 +606,6 @@ def __preprocess_start_event(root: etree._Element, element_id):
     start_event = root.find(f".//{start_event_tag}[@id='{element_id}']")
     if start_event is not None and "isInterrupting" in start_event.attrib:
         del start_event.attrib["isInterrupting"]
-        print(f"Removed 'isInterrupting' attribute from start event '{element_id}'.")
     return root
 
 
@@ -849,40 +888,45 @@ def __construct_auxiliary_points(
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     set([docking_pt_src, docking_pt_tgt])
     pathways = []
-
     if path_start[0] == path_end[0] or path_start[1] == path_end[1]:
-        # Base case, just return none twice
-        # Allow it only in case LEFT-RIGHT or TOP-BOTTOM docking
-        docking_pts = {docking_pt_src, docking_pt_tgt}
-        if docking_pts == {DockingDirection.LEFT, DockingDirection.RIGHT} \
-            or docking_pts == {DockingDirection.TOP, DockingDirection.BOTTOM} \
-            and docking_pt_src != docking_pt_tgt:
+        if (
+            docking_pt_src == DockingDirection.LEFT
+            and docking_pt_tgt == DockingDirection.RIGHT
+        ) or (
+            docking_pt_src == DockingDirection.BOTTOM
+            and docking_pt_tgt == DockingDirection.TOP
+        ):
+            # We allow only LEFT-RIGHT and BOTTOM-TOP straight connections
+            # Otherwise, we might end up with some weird cases, e.g., BOTTOM-BOTTOM straight lines
             pathways.append([None, None])
 
-    
+    # Case 1 L-Shaped: Vertical Exit -> Horizontal Entry
+    if docking_pt_src in {
+        DockingDirection.BOTTOM,
+        DockingDirection.TOP,
+    } and docking_pt_tgt in {DockingDirection.LEFT, DockingDirection.RIGHT}:
+
+        aux_pt = (path_start[0], path_end[1])
+        pathways.append([aux_pt, None])
+
+    # Case 2 L-Shaped: Horizontal Exit -> Vertical Entry
+    elif docking_pt_src in {
+        DockingDirection.LEFT,
+        DockingDirection.RIGHT,
+    } and docking_pt_tgt in {DockingDirection.BOTTOM, DockingDirection.TOP}:
+
+        aux_pt = (path_end[0], path_start[1])
+        pathways.append([None, aux_pt])
+
     pathways.extend(
         __construct_c_shaped_flow(
             path_start, path_end, docking_pt_src, docking_pt_tgt, offset
         )
     )
-    
+
     pathways.extend(
         __construct_s_shaped_flow(path_start, path_end, docking_pt_src, docking_pt_tgt)
     )
-
-
-    if docking_pt_src in {
-        DockingDirection.BOTTOM,
-        DockingDirection.TOP,
-    } and docking_pt_tgt in {DockingDirection.LEFT, DockingDirection.RIGHT}:
-        # 1. L-shaped with (x1, y2)
-        pathways.append([(path_start[0], path_end[1]), None])
-    if docking_pt_src in {
-        DockingDirection.LEFT,
-        DockingDirection.RIGHT,
-    } and docking_pt_tgt in {DockingDirection.BOTTOM, DockingDirection.TOP}:
-        # 2. L-shaped with (x2, y1)
-        pathways.append([None, (path_end[0], path_start[1])])
 
     return pathways
 
@@ -950,7 +994,7 @@ def __prioritize_paths(paths: List, source, target) -> List:
     def get_score(path):
 
         # Visual complexity - number of turns
-        used_docking_points = not path[1]
+        not path[1]
         total_path_intersection = path[2]
         num_turns = len(path[0])
 
@@ -966,12 +1010,10 @@ def __prioritize_paths(paths: List, source, target) -> List:
             )
 
         return (
-            used_docking_points, # Should use docking points that are not used for other paths in the other direction
-            total_path_intersection, # Should have minimal intersection with other paths
-            num_turns, # Should be simple
-            is_misaligned, # Should be from optimal side
-            length # Should be short
-
+            num_turns,  # Should be simple
+            is_misaligned,
+            length,
+            total_path_intersection,  # Should have minimal intersection with other paths
         )
 
     return sorted(paths, key=get_score)
@@ -1005,7 +1047,7 @@ def __construct_possible_paths(
     """
     paths = product(source_docking_points, target_docking_points)
     possible_full_paths = []
-    backup_path = None
+    backup_paths = []
     source_shape = shapely.box(
         source_coords[0],
         source_coords[1],
@@ -1029,22 +1071,41 @@ def __construct_possible_paths(
     offset = randomness * max(target_coords[3], source_coords[3])
     for src, target in paths:
         # Check if the path intersects with any of the shapes
-        docking_pt_source = __get_docking_point_name(src, source_coords)
-        docking_pt_target = __get_docking_point_name(target, target_coords)
+        src_coords_connection = __get_docking_point(source_coords, src)
+        tgt_coords_connection = __get_docking_point(target_coords, target)
         pathways = __construct_auxiliary_points(
-            src, target, docking_pt_source, docking_pt_target, offset
+            src_coords_connection, tgt_coords_connection, src, target, offset
         )
         for i in range(len(pathways)):
             points_to_add = []
             for point in pathways[i]:
                 if point is not None:
                     points_to_add.append(point)
-            constructed_path = [src, *points_to_add, target]
+            constructed_path = [
+                src_coords_connection,
+                *points_to_add,
+                tgt_coords_connection,
+            ]
+            len(constructed_path)
             multilane_path = __turn_points_into_multi_linestring(constructed_path)
-            backup_path = constructed_path
+            backup_paths.append(
+                (
+                    constructed_path,
+                    __check_for_intersection_with_other_paths(
+                        multilane_path, prev_paths
+                    ),
+                )
+            )
             if not __check_for_path_intersection(
                 multilane_path, remaining_shapes, source_shape, target_shape
             ):
+                # If it is exactly of length 2, it means it is a straight line
+                # We can take it directly
+                """
+                if path_length == 2:
+                    print("Found straight line path, returning it directly")
+                    return constructed_path
+                """
                 # If it does not intersect, we can add it to the list
 
                 possible_full_paths.append(
@@ -1064,10 +1125,14 @@ def __construct_possible_paths(
         )
         return possible_full_paths[0][0]
     print("No suitable path found, returning backup path")
-    return backup_path
+    # We will choose the path with the least intersection with other paths
+    backup_paths = sorted(backup_paths, key=lambda x: x[1])
+    return backup_paths[0][0]
 
 
-def __construct_possible_directions(flow : str) -> Tuple[List[DockingDirection], List[DockingDirection]]:
+def __construct_possible_directions(
+    flow: str,
+) -> Tuple[List[DockingDirection], List[DockingDirection]]:
     if flow == "r" or flow == "l":
 
         possible_directions_1 = [
@@ -1080,7 +1145,7 @@ def __construct_possible_directions(flow : str) -> Tuple[List[DockingDirection],
             DockingDirection.TOP,
             DockingDirection.BOTTOM,
         ]
-        if flow == "r": 
+        if flow == "r":
             possible_directions_src = possible_directions_1
             possible_directions_tgt = possible_directions_2
         else:
@@ -1097,7 +1162,7 @@ def __construct_possible_directions(flow : str) -> Tuple[List[DockingDirection],
             DockingDirection.LEFT,
             DockingDirection.RIGHT,
         ]
-        if flow == "u": 
+        if flow == "u":
             possible_directions_src = possible_directions_1
             possible_directions_tgt = possible_directions_2
         else:
@@ -1142,6 +1207,7 @@ def __construct_possible_directions(flow : str) -> Tuple[List[DockingDirection],
 
     return possible_directions_src, possible_directions_tgt
 
+
 def connect_points(
     source_coords,
     target_coords,
@@ -1151,8 +1217,20 @@ def connect_points(
     """
     This function takes the source and target shapes and returns the docking point
     """
-    flow = __find_location_of_flow(source_coords, target_coords)
-    possible_docking_points_src, possible_docking_points_tgt = __construct_possible_directions(flow)
+    # flow = __find_location_of_flow(source_coords, target_coords)
+    # possible_docking_points_src, possible_docking_points_tgt = __construct_possible_directions(flow)
+    possible_docking_points_src = [
+        DockingDirection.LEFT,
+        DockingDirection.RIGHT,
+        DockingDirection.TOP,
+        DockingDirection.BOTTOM,
+    ]
+    possible_docking_points_tgt = [
+        DockingDirection.LEFT,
+        DockingDirection.RIGHT,
+        DockingDirection.TOP,
+        DockingDirection.BOTTOM,
+    ]
     path = __construct_possible_paths(
         possible_docking_points_src,
         possible_docking_points_tgt,
