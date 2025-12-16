@@ -12,8 +12,16 @@ from pm4py.algo.discovery.inductive.dtypes.im_ds import (
 from pm4py.objects.dfg import util as dfu
 from pm4py.objects.dfg.obj import DFG
 from pm4py.objects.dfg.util import get_transitive_relations
-from pm4py.statistics.eventually_follows.uvcl.get import apply as to_efg
 
+from pm4py.algo.discovery.inductive.variants.imf import IMFParameters
+from pm4py.util import exec_utils
+from powl.discovery.total_order_based.inductive.utils.filtering import (
+    FILTERING_THRESHOLD,
+    FILTERING_TYPE,
+    FilteringType,
+)
+
+from powl.general_utils.efg_frequency_filtering import filter_efg_based_on_filtered_dfg
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import POWL, StrictPartialOrder
 
@@ -150,16 +158,24 @@ class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
     ) -> Optional[BinaryRelation]:
 
         dfg = obj.dfg
+        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
+        noise_threshold = None
+        if FILTERING_TYPE in parameters.keys():
+            filtering_type = parameters[FILTERING_TYPE]
+            if filtering_type is FilteringType.DFG_FREQUENCY:
+                noise_threshold = exec_utils.get_param_value(
+                    IMFParameters.NOISE_THRESHOLD, parameters, 0.0
+                )
+                print('FILTERING: ', noise_threshold)
 
         if type(obj) is IMDataStructureUVCL:
-            efg = to_efg(obj)
+            efg = filter_efg_based_on_filtered_dfg(obj, alphabet, dfg, noise_threshold)
         elif type(obj) is IMDataStructureDFG:
             _, post_sets = get_transitive_relations(dfg)
             efg = get_efg(post_sets)
         else:
             raise NotImplementedError
 
-        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
         po = generate_initial_order(alphabet, efg)
         clustered_po = cluster_order(po)
 
