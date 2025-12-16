@@ -28,8 +28,8 @@ class CutFactoryCyclicDecisionGraph(CutFactory):
         if type(obj) is IMDataStructureUVCL:
             return [
                 CyclicDecisionGraphCutUVCL,
-                POWLConcurrencyCutUVCL,
                 MaximalPartialOrderCutUVCL,
+                POWLConcurrencyCutUVCL,
                 POWLLoopCutUVCL,
             ]
         elif type(obj) is IMDataStructureDFG:
