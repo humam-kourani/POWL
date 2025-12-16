@@ -3,7 +3,7 @@ from itertools import combinations
 from typing import Any, Collection, Dict, List, Optional
 
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
-
+from pm4py.objects.dfg import util as dfu
 from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 
@@ -17,9 +17,8 @@ class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
         cls, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Optional[List[Any]]:
 
-        alphabet = parameters["alphabet"]
         dfg = obj.dfg
-
+        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
         groups = [frozenset([a]) for a in alphabet]
 
         def _get_group(activity):
