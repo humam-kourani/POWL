@@ -34,9 +34,9 @@ class CutFactoryPOWLDecisionGraphMaximal(CutFactory):
         if type(obj) is IMDataStructureUVCL:
             return [
                 MaximalDecisionGraphCutUVCL,
-                POWLConcurrencyCutUVCL,
-                POWLLoopCutUVCL,
                 MaximalPartialOrderCutUVCL,
+                POWLConcurrencyCutUVCL,
+                POWLLoopCutUVCL
             ]
         elif type(obj) is IMDataStructureDFG:
             return [

@@ -29,14 +29,18 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         cls, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Optional[List[Any]]:
 
-        alphabet = parameters["alphabet"]
-        transitive_successors = parameters["transitive_successors"]
+        dfg = obj.dfg
+        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
+        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(
+            dfg
+        )
 
         groups = [frozenset([a]) for a in alphabet]
 
         for a, b in combinations(alphabet, 2):
             if b in transitive_successors[a] and a in transitive_successors[b]:
                 groups = cut_util.merge_groups_based_on_activities(a, b, groups)
+
 
         if len(groups) < 2:
             return None
@@ -76,28 +80,24 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
     ) -> Optional[Tuple[DecisionGraph, List[POWL]]]:
 
         dfg = obj.dfg
-        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
 
         start_activities = set(obj.dfg.start_activities.keys())
         end_activities = set(obj.dfg.end_activities.keys())
 
-        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(
-            dfg
-        )
+        # def keep(a):
+        #     ok_start = (a in start_activities) or (
+        #         len(set(transitive_predecessors[a]) & start_activities) > 0
+        #     )
+        #     ok_end = (a in end_activities) or (
+        #         len(set(transitive_successors[a]) & end_activities) > 0
+        #     )
+        #     return ok_start and ok_end
+        #
+        # alphabet = [a for a in alphabet if keep(a)]
 
-        def keep(a):
-            ok_start = (a in start_activities) or (
-                len(set(transitive_predecessors[a]) & start_activities) > 0
-            )
-            ok_end = (a in end_activities) or (
-                len(set(transitive_successors[a]) & end_activities) > 0
-            )
-            return ok_start and ok_end
+        # parameters["alphabet"] = alphabet
+        # parameters["transitive_successors"] = transitive_successors
 
-        alphabet = [a for a in alphabet if keep(a)]
-
-        parameters["alphabet"] = alphabet
-        parameters["transitive_successors"] = transitive_successors
 
         groups = cls.holds(obj, parameters)
         if groups is None:
@@ -142,10 +142,6 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
                 for e in t:
                     if e in group:
                         seg.append(e)
-                    else:
-                        if len(seg) > 0:
-                            logs[i][tuple(seg)] += freq
-                            seg = []
                 if len(seg) > 0:
                     logs[i][tuple(seg)] += freq
 
