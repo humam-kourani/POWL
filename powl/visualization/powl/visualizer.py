@@ -92,9 +92,10 @@ def apply(powl: POWL, variant=DEFAULT_VARIANT, frequency_tags=True) -> str:
     str
         SVG Content
     """
-
+    powl = copy.deepcopy(powl)
     if frequency_tags:
-        powl = copy.deepcopy(powl).simplify_using_frequent_transitions()
+        powl = powl.simplify_using_frequent_transitions()
+
 
     viz = exec_utils.get_variant(variant).apply(powl)
     svg_content = viz.pipe().decode("utf-8")

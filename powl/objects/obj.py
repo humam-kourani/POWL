@@ -142,6 +142,34 @@ class FrequentTransition(Transition):
             str(self.activity) + "\n" + "[" + str(min_freq) + "," + str(max_freq) + "]"
         )
 
+    def __copy__(self):
+        if self.skippable:
+            min_freq = 0
+        else:
+            min_freq = 1
+        if self.selfloop:
+            max_freq = "-"
+        else:
+            max_freq = 1
+        ft = FrequentTransition(self.activity, min_freq, max_freq)
+        ft._organization = self._organization
+        ft._role = self._role
+        return ft
+
+    def __deepcopy__(self, memo):
+        if self.skippable:
+            min_freq = 0
+        else:
+            min_freq = 1
+        if self.selfloop:
+            max_freq = "-"
+        else:
+            max_freq = 1
+        ft = FrequentTransition(self.activity, min_freq, max_freq)
+        ft._organization = self._organization
+        ft._role = self._role
+        return ft
+
 
 class StrictPartialOrder(POWL):
     def __init__(self, nodes: TList[POWL]) -> None:
@@ -328,10 +356,13 @@ class Sequence(StrictPartialOrder):
 
 
 class OperatorPOWL(POWL):
+    operator_id: int = 0
     def __init__(self, operator: Operator, children: TList[POWL]) -> None:
         super().__init__()
         self.operator = operator
         self.children = children
+        self._identifier = OperatorPOWL.operator_id
+        OperatorPOWL.operator_id = OperatorPOWL.operator_id + 1
 
     def __repr__(self):
         return f"{self.operator}({self.children})"
@@ -455,23 +486,9 @@ class OperatorPOWL(POWL):
             if res is not None:
                 return res
 
-        if self.operator is Operator.XOR:
-            new_children = []
-            for child in self.children:
-                s_child = child.simplify()
-                if (
-                    isinstance(s_child, OperatorPOWL)
-                    and s_child.operator is Operator.XOR
-                ):
-                    for node in s_child.children:
-                        new_children.append(node.simplify())
-                else:
-                    new_children.append(s_child)
-            return OperatorPOWL(Operator.XOR, [child for child in new_children])
-        else:
-            return OperatorPOWL(
-                self.operator, [child.simplify() for child in self.children]
-            )
+        return OperatorPOWL(
+            self.operator, [child.simplify() for child in self.children]
+        )
 
 
 class DecisionGraph(POWL):

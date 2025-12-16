@@ -217,7 +217,7 @@ class IMBasePOWL(ABC, Generic[T]):
             if powl.operator == Operator.LOOP and len(children) > 2:
                 new_child = OperatorPOWL(Operator.XOR, children[1:])
                 children = [children[0], new_child]
-            powl.children.extend(children)
-            return powl
+            return OperatorPOWL(powl.operator, children)
+
         else:
             raise Exception("Unsupported POWL type!")
