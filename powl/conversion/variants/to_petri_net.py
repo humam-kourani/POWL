@@ -23,6 +23,7 @@ from powl.objects.obj import (
 )
 
 REDUCE_IMPLICIT_PLACES = True
+KEEP_BLOCK_STRUCTURE = False
 
 
 def merge_groups(a, b, groups):
@@ -60,12 +61,28 @@ def recursively_add_tree(
         net.places.add(initial_place)
         add_arc_from_to(initial_entity_subtree, initial_place, net)
     else:
-        initial_place = initial_entity_subtree
+        if KEEP_BLOCK_STRUCTURE:
+            initial_place = get_new_place(counts)
+            net.places.add(initial_place)
+            petri_trans = get_new_hidden_trans(counts, type_trans="skip")
+            net.transitions.add(petri_trans)
+            add_arc_from_to(initial_entity_subtree, petri_trans, net)
+            add_arc_from_to(petri_trans, initial_place, net)
+        else:
+            initial_place = initial_entity_subtree
     if (
         final_entity_subtree is not None
         and type(final_entity_subtree) is PetriNet.Place
     ):
-        final_place = final_entity_subtree
+        if KEEP_BLOCK_STRUCTURE:
+            final_place = get_new_place(counts)
+            net.places.add(final_place)
+            petri_trans = get_new_hidden_trans(counts, type_trans="skip")
+            net.transitions.add(petri_trans)
+            add_arc_from_to(final_place, petri_trans, net)
+            add_arc_from_to(petri_trans, final_entity_subtree, net)
+        else:
+            final_place = final_entity_subtree
     else:
         final_place = get_new_place(counts)
         net.places.add(final_place)
@@ -340,7 +357,8 @@ def apply(powl, parameters=None):
             if len(place.in_arcs) == 0 and place not in initial_marking:
                 remove_place(net, place)
 
-        net = merge_places_connected_with_silent_transition(net, source, sink)
+        if not KEEP_BLOCK_STRUCTURE:
+            net = merge_places_connected_with_silent_transition(net, source, sink)
 
     return net, initial_marking, final_marking
 
