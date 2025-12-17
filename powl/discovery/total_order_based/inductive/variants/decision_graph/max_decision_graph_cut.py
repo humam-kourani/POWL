@@ -142,6 +142,10 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
                 for e in t:
                     if e in group:
                         seg.append(e)
+                    else:
+                        if len(seg) > 0:
+                            logs[i][tuple(seg)] += freq
+                            seg = []
                 if len(seg) > 0:
                     logs[i][tuple(seg)] += freq
 
