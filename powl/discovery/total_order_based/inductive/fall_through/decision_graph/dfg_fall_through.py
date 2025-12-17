@@ -1,17 +1,15 @@
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from pm4py.algo.discovery.inductive.dtypes.im_ds import (
-    IMDataStructureUVCL,
-)
-from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut import CyclicDecisionGraphCutUVCL
+from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 from pm4py.algo.discovery.inductive.fall_through.abc import FallThrough, T
 
-from powl.discovery.total_order_based.inductive.variants.decision_graph.dfg_cut import DFGCutUVCL
+from powl.discovery.total_order_based.inductive.variants.decision_graph.dfg_cut import (
+    DFGCutUVCL,
+)
 from powl.objects.obj import DecisionGraph, POWL
 
 
 class DFGFallThroughUVCL(FallThrough[IMDataStructureUVCL]):
-
     @classmethod
     def holds(
         cls,
@@ -19,7 +17,6 @@ class DFGFallThroughUVCL(FallThrough[IMDataStructureUVCL]):
         parameters: Optional[Dict[str, Any]] = None,
     ) -> bool:
         return True
-
 
     @classmethod
     def apply(
@@ -30,6 +27,3 @@ class DFGFallThroughUVCL(FallThrough[IMDataStructureUVCL]):
         parameters: Optional[Dict[str, Any]] = None,
     ) -> Optional[Tuple[DecisionGraph, List[POWL]]]:
         return DFGCutUVCL.apply(obj, parameters)
-
-
-

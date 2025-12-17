@@ -17,7 +17,8 @@ from powl.discovery.total_order_based.inductive.variants.im_decision_graph_clust
 )
 
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_cyclic import (
-    POWLInductiveMinerDecisionGraphCyclic, POWLInductiveMinerDecisionGraphCyclicStrict,
+    POWLInductiveMinerDecisionGraphCyclic,
+    POWLInductiveMinerDecisionGraphCyclicStrict,
 )
 from powl.discovery.total_order_based.inductive.variants.im_decision_graph_maximal import (
     POWLInductiveMinerDecisionGraphMaximal,

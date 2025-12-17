@@ -1,18 +1,15 @@
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple
 
-from pm4py.algo.discovery.inductive.fall_through.empty_traces import EmptyTracesUVCL
-
-from powl.discovery.total_order_based.inductive.fall_through.decision_graph.empty_traces_decision_graph import (
-    POWLEmptyTracesDecisionGraphUVCL,
-)
 from powl.discovery.total_order_based.inductive.variants.decision_graph.factory_cyclic_dg import (
     CutFactoryCyclicDecisionGraph,
 )
-from powl.discovery.total_order_based.inductive.variants.decision_graph.factory_cyclic_dg_strict import \
-    CutFactoryCyclicDecisionGraphStrict
-from powl.discovery.total_order_based.inductive.variants.im_decision_graph_maximal import \
-    POWLInductiveMinerDecisionGraphMaximal
-from powl.discovery.total_order_based.inductive.variants.im_tree import IMBasePOWL, T
+from powl.discovery.total_order_based.inductive.variants.decision_graph.factory_cyclic_dg_strict import (
+    CutFactoryCyclicDecisionGraphStrict,
+)
+from powl.discovery.total_order_based.inductive.variants.im_decision_graph_maximal import (
+    POWLInductiveMinerDecisionGraphMaximal,
+)
+from powl.discovery.total_order_based.inductive.variants.im_tree import T
 from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints import (
     POWLDiscoveryVariant,
 )
@@ -30,7 +27,9 @@ class POWLInductiveMinerDecisionGraphCyclic(POWLInductiveMinerDecisionGraphMaxim
         return res
 
 
-class POWLInductiveMinerDecisionGraphCyclicStrict(POWLInductiveMinerDecisionGraphMaximal):
+class POWLInductiveMinerDecisionGraphCyclicStrict(
+    POWLInductiveMinerDecisionGraphMaximal
+):
     def instance(self) -> POWLDiscoveryVariant:
         return POWLDiscoveryVariant.DECISION_GRAPH_CYCLIC_STRICT
 
