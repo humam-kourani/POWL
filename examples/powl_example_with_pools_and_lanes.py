@@ -13,6 +13,7 @@ from powl.objects.obj import (
     Transition,
 )
 
+
 def generate_process_1():
     order_coffee = Transition("Order Coffee", "Customer", "Customer")
     pay = Transition("Pay", "Customer", "Customer")
@@ -75,6 +76,6 @@ def generate_process_2():
     with open(bpmn_path, "w") as f:
         f.write(bpmn_model)
 
+
 if __name__ == "__main__":
-    generate_process_1()
     generate_process_2()

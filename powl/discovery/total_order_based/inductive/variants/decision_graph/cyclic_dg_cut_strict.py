@@ -7,8 +7,10 @@ from pm4py.objects.dfg import util as dfu
 from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 
-from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut import CyclicDecisionGraphCutUVCL, \
-    CyclicDecisionGraphCut
+from powl.discovery.total_order_based.inductive.variants.decision_graph.cyclic_dg_cut import (
+    CyclicDecisionGraphCut,
+    CyclicDecisionGraphCutUVCL,
+)
 
 
 class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
@@ -33,9 +35,11 @@ class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
             changed = False
             for (a, b), (c, d) in combinations(dfg.graph, 2):
                 if {a, b, c, d}.issubset(alphabet):
-                    if (_get_group(a) != _get_group(b)
-                            and _get_group(a) == _get_group(d)
-                            and _get_group(b) == _get_group(c)):
+                    if (
+                        _get_group(a) != _get_group(b)
+                        and _get_group(a) == _get_group(d)
+                        and _get_group(b) == _get_group(c)
+                    ):
                         groups = cut_util.merge_groups_based_on_activities(a, b, groups)
                         changed = True
 
@@ -45,7 +49,9 @@ class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
         return groups
 
 
-class StrictCyclicDecisionGraphCutUVCL(StrictCyclicDecisionGraphCut[IMDataStructureUVCL], ABC):
+class StrictCyclicDecisionGraphCutUVCL(
+    StrictCyclicDecisionGraphCut[IMDataStructureUVCL], ABC
+):
     @classmethod
     def project(
         cls,
