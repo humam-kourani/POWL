@@ -20,7 +20,7 @@ class StrictCyclicDecisionGraphCut(CyclicDecisionGraphCut[T], ABC):
     ) -> Optional[List[Any]]:
 
         dfg = obj.dfg
-        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
+        alphabet = parameters["alphabet"]
         groups = [frozenset([a]) for a in alphabet]
 
         def _get_group(activity):

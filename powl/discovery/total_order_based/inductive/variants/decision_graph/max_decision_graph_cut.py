@@ -14,6 +14,7 @@ from pm4py.algo.discovery.inductive.dtypes.im_ds import (
 from pm4py.objects.dfg import util as dfu
 from pm4py.objects.dfg.obj import DFG
 from pm4py.objects.process_tree.obj import Operator
+from polars.polars import first
 
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import DecisionGraph, POWL
@@ -29,11 +30,8 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         cls, obj: T, parameters: Optional[Dict[str, Any]] = None
     ) -> Optional[List[Any]]:
 
-        dfg = obj.dfg
-        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
-        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(
-            dfg
-        )
+        alphabet = parameters["alphabet"]
+        transitive_successors = parameters["transitive_successors"]
 
         groups = [frozenset([a]) for a in alphabet]
 
@@ -45,33 +43,6 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
         if len(groups) < 2:
             return None
 
-        # merged = True
-        # while merged:
-        #     merged = False
-        #     new_groups = [g for g in groups]
-        #     presets = {g: set() for g in groups}
-        #     postsets = {g: set() for g in groups}
-        #     for i, g1 in enumerate(groups):
-        #         for j, g2 in enumerate(groups):
-        #             if i != j:
-        #                 pairs = product(g1, g2)
-        #                 if any((a, b) in dfg.graph for (a, b) in pairs):
-        #                     presets[g2] = presets[g2].union(g1)
-        #                     postsets[g1] = postsets[g1].union(g2)
-        #     for i, g1 in enumerate(groups):
-        #         for j, g2 in enumerate(groups):
-        #             if i != j:
-        #                 if presets[g1] == presets[g2] and postsets[g1] == postsets[g2]:
-        #                     new_groups = cut_util.merge_groups_based_on_activities(list(g1)[0], list(g2)[0], new_groups)
-        #                     merged = True
-        #     if len(new_groups) < 2:
-        #         return groups
-        #     else:
-        #         groups = new_groups
-        #
-        # if len(groups) < 2:
-        #     return None
-
         return groups
 
     @classmethod
@@ -81,45 +52,60 @@ class MaximalDecisionGraphCut(Cut[T], ABC, Generic[T]):
 
         dfg = obj.dfg
 
-        start_activities = set(obj.dfg.start_activities.keys())
-        end_activities = set(obj.dfg.end_activities.keys())
+        start_acts = set(obj.dfg.start_activities.keys())
+        end_acts = set(obj.dfg.end_activities.keys())
 
-        # def keep(a):
-        #     ok_start = (a in start_activities) or (
-        #         len(set(transitive_predecessors[a]) & start_activities) > 0
-        #     )
-        #     ok_end = (a in end_activities) or (
-        #         len(set(transitive_successors[a]) & end_activities) > 0
-        #     )
-        #     return ok_start and ok_end
-        #
-        # alphabet = [a for a in alphabet if keep(a)]
+        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
+        transitive_predecessors, transitive_successors = dfu.get_transitive_relations(
+            dfg
+        )
 
-        # parameters["alphabet"] = alphabet
-        # parameters["transitive_successors"] = transitive_successors
-
+        parameters["alphabet"] = alphabet
+        parameters["transitive_predecessors"] = transitive_predecessors
+        parameters["transitive_successors"] = transitive_successors
 
         groups = cls.holds(obj, parameters)
         if groups is None:
             return groups
+
+        # cache start/end flags per group
+        group_has_start = [any(a in start_acts for a in g) for g in groups]
+        group_has_end = [any(a in end_acts for a in g) for g in groups]
+
+        # cache group->group connectivity (directed)
+        n = len(groups)
+        group_conn = [[False] * n for _ in range(n)]
+
+        # efficient: build act->group index
+        act_to_group = {}
+        for i, g in enumerate(groups):
+            for a in g:
+                act_to_group[a] = i
+
+        for (a, b), freq in dfg.graph.items():
+            if freq <= 0:
+                continue
+            ga = act_to_group.get(a)
+            gb = act_to_group.get(b)
+            if ga != gb:
+                group_conn[ga][gb] = True
+
+        parameters["_mdgc_act_to_group"] = act_to_group
+        parameters["_mdgc_group_has_start"] = group_has_start
+        parameters["_mdgc_group_has_end"] = group_has_end
+        parameters["_mdgc_group_conn"] = group_conn
+
         children = cls.project(obj, groups, parameters)
 
         order = BinaryRelation(nodes=children)
-        for i, g1 in enumerate(groups):
-            for j, g2 in enumerate(groups):
-                if i != j:
-                    pairs = product(g1, g2)
-                    if any((a, b) in dfg.graph for (a, b) in pairs):
-                        order.add_edge(children[i], children[j])
 
-        start_nodes = []
-        end_nodes = []
-        for i in range(len(groups)):
-            node = groups[i]
-            if any(a in start_activities for a in node):
-                start_nodes.append(children[i])
-            if any(a in end_activities for a in node):
-                end_nodes.append(children[i])
+        for i in range(n):
+            for j in range(n):
+                if i != j and group_conn[i][j]:
+                    order.add_edge(children[i], children[j])
+
+        start_nodes = [children[i] for i in range(n) if group_has_start[i]]
+        end_nodes = [children[i] for i in range(n) if group_has_end[i]]
 
         dg = DecisionGraph(order, start_nodes, end_nodes)
         return dg, dg.children
@@ -135,17 +121,18 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
     ) -> List[IMDataStructureUVCL]:
 
         logs = [Counter() for _ in groups]
-
         for t, freq in obj.data_structure.items():
             for i, group in enumerate(groups):
                 seg = []
+                last = None
                 for e in t:
                     if e in group:
+                        if len(seg) > 0 and last not in group:
+                            if obj.dfg.graph.get((last, e), 0) > obj.dfg.graph.get((seg[-1], e), 0):
+                                logs[i][tuple(seg)] += freq
+                                seg = []
                         seg.append(e)
-                    else:
-                        if len(seg) > 0:
-                            logs[i][tuple(seg)] += freq
-                            seg = []
+                    last = e
                 if len(seg) > 0:
                     logs[i][tuple(seg)] += freq
 

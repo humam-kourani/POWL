@@ -3,14 +3,12 @@ from itertools import combinations
 from typing import Any, Collection, Dict, List, Optional
 
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
-from pm4py.objects.dfg import util as dfu
 from pm4py.algo.discovery.inductive.cuts.abc import T
 from pm4py.algo.discovery.inductive.dtypes.im_ds import IMDataStructureUVCL
 
 from powl.discovery.total_order_based.inductive.variants.decision_graph.max_decision_graph_cut import (
-    MaximalDecisionGraphCut,
+    MaximalDecisionGraphCut, MaximalDecisionGraphCutUVCL,
 )
-from collections import Counter
 
 
 class CyclicDecisionGraphCut(MaximalDecisionGraphCut[T], ABC):
@@ -20,7 +18,7 @@ class CyclicDecisionGraphCut(MaximalDecisionGraphCut[T], ABC):
     ) -> Optional[List[Any]]:
 
         dfg = obj.dfg
-        alphabet = sorted(dfu.get_vertices(dfg), key=lambda g: g.__str__())
+        alphabet = parameters["alphabet"]
 
         groups = [frozenset([a]) for a in alphabet]
 
@@ -43,19 +41,4 @@ class CyclicDecisionGraphCutUVCL(CyclicDecisionGraphCut[IMDataStructureUVCL], AB
         parameters: Optional[Dict[str, Any]] = None,
     ) -> List[IMDataStructureUVCL]:
 
-        logs = [Counter() for _ in groups]
-
-        for t, freq in obj.data_structure.items():
-            for i, group in enumerate(groups):
-                seg = []
-                for e in t:
-                    if e in group:
-                        seg.append(e)
-                    else:
-                        if len(seg) > 0:
-                            logs[i][tuple(seg)] += freq
-                            seg = []
-                if len(seg) > 0:
-                    logs[i][tuple(seg)] += freq
-
-        return [IMDataStructureUVCL(l) for l in logs]
+        return MaximalDecisionGraphCutUVCL.project(obj, groups, parameters)

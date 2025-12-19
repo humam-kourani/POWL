@@ -166,7 +166,6 @@ class MaximalPartialOrderCut(Cut[T], ABC, Generic[T]):
                 noise_threshold = exec_utils.get_param_value(
                     IMFParameters.NOISE_THRESHOLD, parameters, 0.0
                 )
-                print('FILTERING: ', noise_threshold)
 
         if type(obj) is IMDataStructureUVCL:
             efg = filter_efg_based_on_filtered_dfg(obj, alphabet, dfg, noise_threshold)
