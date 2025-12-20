@@ -1,6 +1,6 @@
 from abc import ABC
 from collections import Counter
-from itertools import combinations, product
+from itertools import combinations
 from typing import Any, Collection, Dict, Generic, List, Optional, Tuple
 
 from pm4py.algo.discovery.inductive.cuts import utils as cut_util
@@ -14,7 +14,6 @@ from pm4py.algo.discovery.inductive.dtypes.im_ds import (
 from pm4py.objects.dfg import util as dfu
 from pm4py.objects.dfg.obj import DFG
 from pm4py.objects.process_tree.obj import Operator
-from polars.polars import first
 
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import DecisionGraph, POWL
@@ -124,15 +123,9 @@ class MaximalDecisionGraphCutUVCL(MaximalDecisionGraphCut[IMDataStructureUVCL], 
         for t, freq in obj.data_structure.items():
             for i, group in enumerate(groups):
                 seg = []
-                last = None
                 for e in t:
                     if e in group:
-                        if len(seg) > 0 and last not in group:
-                            if obj.dfg.graph.get((last, e), 0) > obj.dfg.graph.get((seg[-1], e), 0):
-                                logs[i][tuple(seg)] += freq
-                                seg = []
                         seg.append(e)
-                    last = e
                 if len(seg) > 0:
                     logs[i][tuple(seg)] += freq
 
