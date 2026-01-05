@@ -1,4 +1,5 @@
 from powl.main import (
+    convert_from_workflow_net,
     convert_to_bpmn,
     convert_to_petri_net,
     discover,

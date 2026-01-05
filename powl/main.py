@@ -9,6 +9,7 @@ from pm4py.objects.ocel.obj import OCEL
 from pm4py.utils import get_properties
 
 from powl.conversion.converter import apply as powl_converter
+from powl.conversion.to_powl.from_pn.converter import convert_workflow_net_to_powl
 from powl.conversion.variants.to_bpmn import apply as to_bpmn
 from powl.discovery.dfg_based.algorithm import apply as dfg_discovery
 from powl.discovery.object_centric.algorithm import apply as oc_discovery
@@ -23,6 +24,7 @@ from powl.discovery.total_order_based.inductive.variants.powl_discovery_varaints
 )
 from powl.objects.obj import POWL
 from powl.visualization.powl.visualizer import POWLVisualizationVariants
+from pm4py import PetriNet
 
 
 def import_ocel(path: str) -> OCEL:
@@ -234,6 +236,8 @@ def save_visualization_net(powl: POWL, file_path: str, use_frequency_tags=True):
 def convert_to_petri_net(powl: POWL):
     return powl_converter(powl)
 
+def convert_from_workflow_net(net: PetriNet) -> POWL:
+    return convert_workflow_net_to_powl(net)
 
 def convert_to_bpmn(powl: POWL):
     bpmn, _, _ = to_bpmn(powl)
