@@ -507,8 +507,8 @@ class DecisionGraph(POWL):
         super().__init__()
         self.operator = None
         self.children = [n for n in order.nodes]
-        self.start_nodes = start_nodes
-        self.end_nodes = end_nodes
+        self.start_nodes = list(start_nodes)
+        self.end_nodes = list(end_nodes)
         # if not all(isinstance(node, POWL) for node in nodes):
         #     raise Exception("The nodes of the decision graph must be POWL models!")
         if not start_nodes or not set(start_nodes).issubset(order.nodes):
@@ -630,52 +630,8 @@ class DecisionGraph(POWL):
                         )
             new_children_map[child] = s_child
         new_dg = self.__apply_mapping(new_children_map, edges_to_remove)
+        return new_dg
 
-        old_size = len(new_dg.children) + 1
-        while len(new_dg.children) < old_size:
-            old_size = len(new_dg.children)
-            new_dg = new_dg.__group_pure_seq()
-
-        seq1 = new_dg.__group_start_seq()
-        start_nodes = []
-        if seq1:
-            start_nodes = seq1.children[:-1]
-            new_dg = seq1.children[-1]
-
-        seq2 = new_dg.__group_end_seq()
-        end_nodes = []
-        if seq2:
-            end_nodes = seq2.children[1:]
-            new_dg = seq2.children[0]
-
-        new_node = new_dg
-        if len(new_dg.children) == 1:
-            child_0 = new_dg.children[0]
-            if new_dg.order.is_edge(new_dg.start, new_dg.end):
-                if (
-                    isinstance(child_0, OperatorPOWL)
-                    and child_0.operator is Operator.LOOP
-                ):
-                    if isinstance(child_0.children[0], SilentTransition):
-                        new_node = OperatorPOWL(Operator.LOOP, child_0.children)
-                    elif isinstance(child_0.children[1], SilentTransition):
-                        new_node = OperatorPOWL(
-                            Operator.LOOP, list(reversed(child_0.children))
-                        )
-                elif isinstance(child_0, DecisionGraph):
-                    child_0.empty_path = True
-                    child_0.order.add_edge(child_0.start, child_0.end)
-                    new_node = child_0
-            else:
-                new_node = child_0
-
-        if len(start_nodes) > 0 or len(end_nodes) > 0:
-            if isinstance(new_node, Sequence):
-                return Sequence(start_nodes + new_node.children + end_nodes)
-            else:
-                return Sequence(start_nodes + [new_node] + end_nodes)
-        else:
-            return new_node
 
     def __apply_mapping(self, mapping, edges_to_remove=None) -> "DecisionGraph":
         if edges_to_remove is None:
