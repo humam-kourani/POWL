@@ -1,3 +1,4 @@
+from copy import copy
 from itertools import combinations
 
 from pm4py import PetriNet
@@ -6,7 +7,7 @@ from pm4py.objects.petri_net.utils import petri_utils as pn_util
 
 from powl.conversion.to_powl.from_pn.utils.subnet_creation import (
     add_arc_from_to,
-    id_generator,
+    id_generator, clone_place,
 )
 
 
@@ -273,3 +274,23 @@ def __redirect_shared_arcs_to_new_place(
 
 def is_silent(transition) -> bool:
     return transition.label is None
+
+
+def make_self_loop_explicit(net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place):
+    if start_place == end_place:
+        place = start_place
+        place_copy = clone_place(net, place, {})
+        out_arcs = place.out_arcs
+        for arc in list(out_arcs):
+            target = arc.target
+            pn_util.remove_arc(net, arc)
+            add_arc_from_to(place_copy, target, net)
+        do_transition = PetriNet.Transition(f"silent_do_{place.name}", None)
+        do = set()
+        do.add(do_transition)
+        net.transitions.add(do_transition)
+        add_arc_from_to(place, do_transition, net)
+        add_arc_from_to(do_transition, place_copy, net)
+        return net, place, place_copy
+    else:
+        return net, start_place, end_place

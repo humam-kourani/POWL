@@ -1,16 +1,11 @@
 from copy import copy
-from itertools import combinations
 
 from pm4py.objects.petri_net.obj import PetriNet
 from pm4py.objects.petri_net.utils import petri_utils as pn_util
 
-from powl.conversion.to_powl.from_pn.utils.subnet_creation import (
-    add_arc_from_to,
-    clone_place,
-    pn_transition_to_powl,
-)
+from powl.conversion.to_powl.from_pn.utils.subnet_creation import pn_transition_to_powl, add_arc_from_to, clone_place
 from powl.conversion.to_powl.from_pn.utils.weak_reachability import (
-    get_reachable_transitions_from_place_to_another,
+    get_reachable_without_looping,
 )
 
 
@@ -25,64 +20,32 @@ def mine_base_case(net: PetriNet):
 def mine_self_loop(
     net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place
 ):
-    if start_place == end_place:
-        place = start_place
-        place_copy = clone_place(net, place, {})
-        redo = copy(net.transitions)
-        out_arcs = place.out_arcs
-        for arc in list(out_arcs):
-            target = arc.target
-            pn_util.remove_arc(net, arc)
-            add_arc_from_to(place_copy, target, net)
-        do_transition = PetriNet.Transition(f"silent_do_{place.name}", None)
-        do = set()
-        do.add(do_transition)
-        net.transitions.add(do_transition)
-        add_arc_from_to(place, do_transition, net)
-        add_arc_from_to(do_transition, place_copy, net)
-        return do, redo, place, place_copy
+
+    if len(start_place.out_arcs) == 1 and len(end_place.in_arcs) == 1:
+        t = pn_util.pre_set(end_place)
+        if t in pn_util.post_set(start_place) and isinstance(t, PetriNet.Transition) and not t.label:
+            return {t}, copy(net.transitions), start_place, end_place
+
+    if len(start_place.in_arcs) == 1 and len(end_place.out_arcs) == 1:
+        t = pn_util.pre_set(start_place)
+        if t in pn_util.post_set(end_place) and isinstance(t, PetriNet.Transition) and not t.label:
+            return copy(net.transitions), {t}, start_place, end_place
 
     return None
 
 
-def mine_loop(net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place):
-    redo_subnet_transitions = get_reachable_transitions_from_place_to_another(
-        end_place, start_place
-    )
+def mine_skip(
+    net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place
+):
 
-    if len(redo_subnet_transitions) == 0:
-        return None, None
+    if len(start_place.in_arcs) == 0 and len(end_place.out_arcs) == 0:
+        silent_connectors = [t for t in pn_util.pre_set(end_place) if isinstance(t, PetriNet.Transition) and not t.label and len(t.out_arcs) == 1 and len(t.in_arcs) == 1 and t in pn_util.post_set(start_place)]
+        if len(silent_connectors) > 0:
+            other_children = {t for t in net.transitions if t not in silent_connectors}
+            if len(other_children) > 0:
+                return other_children, start_place, end_place
 
-    do_subnet_transitions = get_reachable_transitions_from_place_to_another(
-        start_place, end_place
-    )
-
-    if len(do_subnet_transitions) == 0:
-        raise Exception("This should not be possible!")
-
-    if do_subnet_transitions & redo_subnet_transitions:
-        # This could happen if we have ->(..., Loop)
-        return None, None
-
-    if net.transitions != (do_subnet_transitions | redo_subnet_transitions):
-        raise Exception("Something went wrong!")
-
-    # A loop is detected: the set of transitions is partitioned into two disjoint, non-empty subsets (do and redo)
-    return do_subnet_transitions, redo_subnet_transitions
-
-
-def mine_xor(net: PetriNet, reachability_map):
-    choice_branches = [{t} for t in net.transitions]
-
-    for t1, t2 in combinations(net.transitions, 2):
-        if t1 in reachability_map[t2] or t2 in reachability_map[t1]:
-            new_branch = {t1, t2}
-            choice_branches = __combine_parts(new_branch, choice_branches)
-
-    if net.transitions != set().union(*choice_branches):
-        raise Exception("This should not happen!")
-
-    return choice_branches
+    return None
 
 
 def mine_partial_order(net, end_place, reachability_map):
@@ -107,6 +70,39 @@ def mine_partial_order(net, end_place, reachability_map):
                 not_in_every_branch = union_of_branches - intersection_of_branches
             if len(not_in_every_branch) > 1:
                 partition = __combine_parts(not_in_every_branch, partition)
+
+    return partition
+
+
+def mine_choice_graph(net):
+    partition = [{t} for t in net.transitions]
+
+    split_transitions = [transition for transition in net.transitions if  len(transition.out_arcs) > 1]
+    join_transitions = [transition for transition in net.transitions if len(transition.in_arcs) > 1]
+
+    for split in split_transitions:
+        split_branches = []
+        for start_place in pn_util.post_set(split):
+            new_branch = {
+                node
+                for node in get_reachable_without_looping(start_place, split)
+                if isinstance(node, PetriNet.Transition)
+            }
+            split_branches.append(new_branch)
+        union_of_branches = set().union(*split_branches)
+        intersection_of_branches = set.intersection(*split_branches)
+        not_in_every_branch = union_of_branches - intersection_of_branches
+        if len(not_in_every_branch) > 1:
+            not_in_every_branch.add(split)
+            partition = __combine_parts(not_in_every_branch, partition)
+        else:
+            raise Exception("This should not happen!")
+
+    for join in join_transitions:
+        pre_transitions = {join}
+        for pre_place in pn_util.pre_set(join):
+            pre_transitions = pre_transitions | pn_util.pre_set(pre_place)
+        partition = __combine_parts(pre_transitions, partition)
 
     return partition
 

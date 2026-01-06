@@ -20,6 +20,19 @@ def get_simplified_reachability_graph(net: PetriNet):
     return graph
 
 
+def get_reachable_without_looping(start_node, stop_node):
+    reachable = set()
+    queue = deque()
+    queue.append(start_node)
+    while queue:
+        node = queue.popleft()
+        if node != stop_node and node not in reachable:
+            reachable.add(node)
+            successors = pn_util.post_set(node)
+            queue.extend(successors)
+    return reachable
+
+
 def get_reachable_transitions_from_place_to_another(
     start_place: PetriNet.Place, end_place: PetriNet.Place
 ):

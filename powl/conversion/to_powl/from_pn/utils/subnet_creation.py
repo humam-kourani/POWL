@@ -69,7 +69,7 @@ def locally_identical(p1, p2, transitions):
     return pre1 == pre2 and post1 == post2
 
 
-def apply_partial_order_projection(
+def apply_projection(
     net: PetriNet,
     subnet_transitions: Set[PetriNet.Transition],
     start_places: Set[PetriNet.Place],
