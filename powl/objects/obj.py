@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import List as TList, Optional, Union
 
+import networkx as nx
 from pm4py.objects.process_tree.obj import Operator, ProcessTree
 
 from powl.objects.BinaryRelation import BinaryRelation
@@ -607,12 +608,15 @@ class DecisionGraph(POWL):
         edges_to_remove = set()
         for child in self.children:
             s_child = child.simplify_using_frequent_transitions()
+
             if isinstance(s_child, Transition):
                 preset = self.order.get_preset(child)
                 postset = self.order.get_postset(child)
-                if all(
-                    self.order.is_edge(pre, post) for pre in preset for post in postset
-                ):
+
+                repeatable = self.order.is_edge(child, child)
+                skippable = all(self.order.is_edge(pre, post) for pre in preset for post in postset)
+
+                if skippable:
                     for pre in preset:
                         for post in postset:
                             edges_to_remove.add((pre, post))
@@ -622,12 +626,23 @@ class DecisionGraph(POWL):
                         ]
                     if child in self.end_nodes:
                         self.end_nodes = [x for x in self.end_nodes if x not in preset]
+
+                if repeatable:
+                    edges_to_remove.add((child, child))
+
+                if skippable or repeatable:
                     if isinstance(s_child, FrequentTransition):
-                        s_child.set_skippable(True)
+                        if skippable:
+                            s_child.set_skippable(True)
+                        if repeatable:
+                            s_child.set_selfloop(True)
                     else:
+                        min_freq = 0 if skippable else 1
+                        max_freq = "-" if repeatable else 1
                         s_child = FrequentTransition(
-                            label=child.label, min_freq=0, max_freq=1
+                            label=child.label, min_freq=min_freq, max_freq=max_freq
                         )
+
             new_children_map[child] = s_child
         new_dg = self.__apply_mapping(new_children_map, edges_to_remove)
         return new_dg
@@ -642,7 +657,7 @@ class DecisionGraph(POWL):
                 if self.order.is_edge(src, tgt) and (src, tgt) not in edges_to_remove:
                     new_src = mapping[src]
                     new_tgt = mapping[tgt]
-                    if new_src != new_tgt:
+                    if new_src != new_tgt or src == tgt:
                         res.add_edge(new_src, new_tgt)
         new_start_nodes = list({mapping[child] for child in self.start_nodes})
         new_end_nodes = list({mapping[child] for child in self.end_nodes})
@@ -760,8 +775,8 @@ class DecisionGraph(POWL):
         return None
 
     def reduce_silent_transitions(self, add_empty_paths=True) -> "POWL":
-        graph_copy = deepcopy(self)
 
+        graph_copy = deepcopy(self)
         mapping = {
             node: node.reduce_silent_transitions(add_empty_paths)
             for node in graph_copy.children
@@ -772,30 +787,25 @@ class DecisionGraph(POWL):
             if isinstance(new_node, SilentTransition):
                 order_nodes.remove(node)
                 for n1 in order_nodes:
-                    for n2 in order_nodes:
-                        if graph_copy.order.is_edge(
-                            n1, node
-                        ) and graph_copy.order.is_edge(node, n2):
-                            graph_copy.order.add_edge(n1, n2)
+                    if graph_copy.order.is_edge(n1, node):
+                        for n2 in order_nodes:
+                            if graph_copy.order.is_edge(node, n2):
+                                graph_copy.order.add_edge(n1, n2)
 
         mapping = {key: value for key, value in mapping.items() if key in order_nodes}
 
         if len(mapping.keys()) == 0:
             return SilentTransition()
         else:
-            new_start = [
-                value
-                for key, value in mapping.items()
-                if graph_copy.order.is_edge(graph_copy.start, key)
-            ]
-            new_end = [
-                value
-                for key, value in mapping.items()
-                if graph_copy.order.is_edge(key, graph_copy.end)
-            ]
             skip = graph_copy.order.is_edge(graph_copy.start, graph_copy.end)
+            new_start = []
+            new_end = []
             new_order = BinaryRelation(list(mapping.values()))
             for node_1 in mapping.keys():
+                if graph_copy.order.is_edge(graph_copy.start, node_1):
+                    new_start.append(mapping[node_1])
+                if graph_copy.order.is_edge(node_1, graph_copy.end):
+                    new_end.append(mapping[node_1])
                 for node_2 in mapping.keys():
                     if graph_copy.order.is_edge(node_1, node_2):
                         new_order.add_edge(mapping[node_1], mapping[node_2])
@@ -818,6 +828,22 @@ class DecisionGraph(POWL):
         new_end = [mapping[n] for n in self.end_nodes]
         empty_path = self.order.is_edge(self.start, self.end)
         return DecisionGraph(new_order, new_start, new_end, empty_path)
+
+    def validate_connectivity(self):
+        G = nx.DiGraph()
+        for node in self.order.nodes:
+            G.add_node(node)
+            for node2 in self.order.nodes:
+                if self.order.is_edge(node, node2):
+                    G.add_edge(node, node2)
+        for node in self.order.nodes:
+            if not (
+                    nx.has_path(G, self.start, node)
+                    and nx.has_path(G, node, self.end)
+            ):
+                raise Exception(
+                    f"All nodes in a choice graph must be on a path from source to sink!"
+                )
 
 
 class StartNode:
