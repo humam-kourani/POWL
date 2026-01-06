@@ -145,20 +145,18 @@ class BinaryRelation:
         return self.is_irreflexive() and self.is_transitive()
 
     def get_start_nodes(self) -> TSet[T]:
-        res = set(self.nodes)
-        for i in range(len(self.nodes)):
-            for j in range(len(self.nodes)):
-                if self._edges[i][j]:
-                    res.discard(self._map_id_to_node[j])
-        return res
+        return {
+            self._map_id_to_node[j]
+            for j in range(len(self.nodes))
+            if not any(self._edges[i][j] for i in range(len(self.nodes)))
+        }
 
     def get_end_nodes(self) -> TSet[T]:
-        res = set(self.nodes)
-        for i in range(len(self.nodes)):
-            for j in range(len(self.nodes)):
-                if self._edges[i][j]:
-                    res.discard(self._map_id_to_node[i])
-        return res
+        return {
+            self._map_id_to_node[i]
+            for i in range(len(self.nodes))
+            if not any(self._edges[i][j] for j in range(len(self.nodes)))
+        }
 
     def is_irreflexive(self) -> bool:
         n = len(self.nodes)
