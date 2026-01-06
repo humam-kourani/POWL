@@ -39,7 +39,12 @@ def mine_skip(
 ):
 
     if len(start_place.in_arcs) == 0 and len(end_place.out_arcs) == 0:
-        silent_connectors = [t for t in pn_util.pre_set(end_place) if isinstance(t, PetriNet.Transition) and not t.label and len(t.out_arcs) == 1 and len(t.in_arcs) == 1 and t in pn_util.post_set(start_place)]
+        silent_connectors = [
+            t for t in pn_util.pre_set(end_place) if isinstance(t, PetriNet.Transition)
+                                                     and not t.label and len(t.out_arcs) == 1
+                                                     and len(t.in_arcs) == 1
+                                                     and t in pn_util.post_set(start_place)
+        ]
         if len(silent_connectors) > 0:
             other_children = {t for t in net.transitions if t not in silent_connectors}
             if len(other_children) > 0:

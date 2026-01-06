@@ -74,6 +74,7 @@ def apply_projection(
     subnet_transitions: Set[PetriNet.Transition],
     start_places: Set[PetriNet.Place],
     end_places: Set[PetriNet.Place],
+    enforce_unique_connection_points
 ):
     subnet_net = PetriNet(f"Subnet_{next(id_generator())}")
     node_map = {}
@@ -83,9 +84,13 @@ def apply_projection(
 
     list_start_places = list(start_places)
     old_start = list_start_places[0]
-    for place in list_start_places[1:]:
-        if not locally_identical(place, old_start, subnet_transitions):
-            raise Exception("Unique local start property is violated!")
+    if enforce_unique_connection_points:
+        if len(list_start_places) > 1:
+            raise Exception("Uniqueness of connection points violated!")
+    else:
+        for place in list_start_places[1:]:
+            if not locally_identical(place, old_start, subnet_transitions):
+                raise Exception("Unique local start property is violated!")
     new_start_place = clone_place(subnet_net, old_start, node_map)
     node_map[old_start] = new_start_place
 
@@ -94,9 +99,13 @@ def apply_projection(
     else:
         list_end_places = list(end_places)
         old_end = list_end_places[0]
-        for place in list_end_places[1:]:
-            if not locally_identical(place, old_end, subnet_transitions):
-                raise Exception("Unique local end property is violated!")
+        if enforce_unique_connection_points:
+            if len(list_end_places) > 1:
+                raise Exception("Uniqueness of connection points violated!")
+        else:
+            for place in list_end_places[1:]:
+                if not locally_identical(place, old_end, subnet_transitions):
+                    raise Exception("Unique local end property is violated!")
         new_end_place = clone_place(subnet_net, old_end, node_map)
         node_map[old_end] = new_end_place
 

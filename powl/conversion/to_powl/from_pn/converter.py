@@ -86,7 +86,7 @@ def __validate_partial_order(po: StrictPartialOrder):
 
 
 def __translate_to_binary_relation(
-    net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place
+    net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place, enforce_unique_connection_points
 ):
 
     groups = [tuple(g) for g in transition_groups]
@@ -131,7 +131,7 @@ def __translate_to_binary_relation(
     for group in groups:
 
         subnet, subnet_start_place, subnet_end_place = apply_projection(
-            net, set(group), group_start_places[group], group_end_places[group]
+            net, set(group), group_start_places[group], group_end_places[group], enforce_unique_connection_points
         )
         child = __translate_petri_to_powl(subnet, subnet_start_place, subnet_end_place)
 
@@ -152,7 +152,11 @@ def __translate_partial_order(
     net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place
 ):
 
-    rel, _, _ = __translate_to_binary_relation(net, transition_groups, i_place, f_place)
+    rel, _, _ = __translate_to_binary_relation(net,
+                                               transition_groups,
+                                               i_place,
+                                               f_place,
+                                               enforce_unique_connection_points=False)
     po = StrictPartialOrder(rel.nodes)
     po.order = rel
     po = __validate_partial_order(po)
@@ -163,7 +167,11 @@ def __translate_choice_graph(
     net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place
 ):
 
-    rel, start_nodes, end_nodes = __translate_to_binary_relation(net, transition_groups, i_place, f_place)
+    rel, start_nodes, end_nodes = __translate_to_binary_relation(net,
+                                                                 transition_groups,
+                                                                 i_place,
+                                                                 f_place,
+                                                                 enforce_unique_connection_points=True)
     cg = DecisionGraph(rel, start_nodes=start_nodes, end_nodes=end_nodes, empty_path=False)
     cg.validate_connectivity()
     return cg
