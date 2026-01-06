@@ -77,13 +77,11 @@ def apply(
 
     nodes, edges = get_sorted_nodes_edges(bpmn_graph)
 
+
     for n in nodes:
         n_id = str(id(n))
-        if isinstance(n, BPMN.Task):
-            viz.node(
-                n_id, shape="box", label=get_label(n.get_name()), fontsize=font_size
-            )
-        elif isinstance(n, BPMN.StartEvent):
+        if isinstance(n, BPMN.StartEvent):
+
             viz.node(
                 n_id,
                 label="",
@@ -93,6 +91,7 @@ def apply(
                 height="0.6",
             )
         elif isinstance(n, BPMN.EndEvent):
+
             viz.node(
                 n_id,
                 label="",
@@ -118,6 +117,7 @@ def apply(
                 )
             # viz.node(n_id, label="+", shape="diamond", fontsize=font_size)
         elif isinstance(n, BPMN.ExclusiveGateway):
+
             with importlib.resources.path(
                 "powl.visualization.powl.variants.icons", "gate.svg"
             ) as gimg:
@@ -134,6 +134,10 @@ def apply(
             # viz.node(n_id, label="X", shape="diamond", fontsize=font_size)
         elif isinstance(n, BPMN.InclusiveGateway):
             viz.node(n_id, label="O", shape="diamond", fontsize=font_size)
+        elif isinstance(n, BPMN.Task):
+            viz.node(
+                n_id, shape="box", label=get_label(n.get_name()), fontsize=font_size
+            )
         else:
             viz.node(n_id, label="", shape="circle", fontsize=font_size)
 
@@ -142,6 +146,7 @@ def apply(
         n_id_2 = str(id(e[1]))
 
         viz.edge(n_id_1, n_id_2, penwidth="2.0")
+
 
     viz.attr(overlap="false")
 
