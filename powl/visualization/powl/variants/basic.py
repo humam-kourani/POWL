@@ -217,10 +217,15 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
     current_color = darken_color(fillcolor, amount=opacity_change_ratio * level)
     block_id = None
 
-    if isinstance(powl, FrequentTransition):
-        label = powl.activity
-        if powl.skippable:
-            if powl.selfloop:
+    if isinstance(powl, FrequentTransition) or (isinstance(powl, Transition) and (skip_order or loop_order)):
+        if isinstance(powl, FrequentTransition):
+            skip_order = skip_order or powl.skippable
+            loop_order = loop_order or powl.selfloop
+            label = powl.activity
+        else:
+            label = powl.label
+        if skip_order:
+            if loop_order:
                 with importlib.resources.path(
                     "powl.visualization.powl.variants.icons", "skip-loop-tag.svg"
                 ) as gimg:
@@ -253,7 +258,7 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
                         fillcolor=current_color,
                     )
         else:
-            if powl.selfloop:
+            if loop_order:
                 with importlib.resources.path(
                     "powl.visualization.powl.variants.icons", "loop-tag.svg"
                 ) as gimg:
@@ -279,6 +284,7 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
                     style="filled",
                     fillcolor=current_color,
                 )
+
     elif isinstance(powl, Transition):
         if isinstance(powl, SilentTransition):
             viz.node(
@@ -391,18 +397,19 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
             this_node_id = make_anchor(block, block_id)
 
             for child in powl.order.nodes:
+                loop_child = powl.order.is_edge(child, child)
                 child_id_map[child] = repr_powl(
                     child,
                     block,
                     color_map,
                     level=level + 1,
                     skip_order=False,
-                    loop_order=False,
+                    loop_order=loop_child,
                 )
 
             for child in powl.order.nodes:
                 for child2 in powl.order.nodes:
-                    if powl.order.is_edge(child, child2):
+                    if child != child2 and powl.order.is_edge(child, child2):
                         add_order_edge(
                             block,
                             child_id_map[child],
