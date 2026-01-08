@@ -1,13 +1,9 @@
 from pm4py import PetriNet
 
-from powl.objects.BinaryRelation import BinaryRelation
-from powl.objects.obj import POWL, StrictPartialOrder, DecisionGraph, OperatorPOWL, Operator, SilentTransition
-
 from powl.conversion.to_powl.from_pn.utils.cut_detection import (
     mine_base_case,
     mine_choice_graph,
     mine_partial_order,
-    mine_self_loop, mine_skip,
 )
 
 from powl.conversion.to_powl.from_pn.utils.preprocessing import (
@@ -20,6 +16,11 @@ from powl.conversion.to_powl.from_pn.utils.subnet_creation import (
 from powl.conversion.to_powl.from_pn.utils.weak_reachability import (
     get_simplified_reachability_graph,
 )
+from powl.objects.obj import POWL
+from powl.objects.tagged_powl.base import TaggedPOWL
+from powl.objects.tagged_powl.choice_graph import ChoiceGraph
+from powl.objects.tagged_powl.partial_order import PartialOrder
+from powl.objects.tagged_powl.to_legacy import convert_tagged_powl_to_legacy_model
 
 
 def convert_workflow_net_to_powl(net: PetriNet) -> POWL:
@@ -35,31 +36,20 @@ def convert_workflow_net_to_powl(net: PetriNet) -> POWL:
     start_place, end_place = validate_workflow_net(net)
     net = preprocess(net)
     res = __translate_petri_to_powl(net, start_place, end_place)
-    res = res.reduce_silent_transitions(add_empty_paths=True)
-    return res.simplify()
+    res = res.reduce_silent_activities()
+    res = convert_tagged_powl_to_legacy_model(res)
+    return res
 
 
 def __translate_petri_to_powl(
     net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place
-) -> POWL:
+) -> TaggedPOWL:
 
     net, start_place, end_place = make_self_loop_explicit(net, start_place, end_place)
 
     base_case = mine_base_case(net)
     if base_case:
         return base_case
-
-    # self_loop = mine_self_loop(net, start_place, end_place)
-    # if self_loop:
-    #     return __translate_self_loop(
-    #         net, self_loop[0], self_loop[1], self_loop[2], self_loop[3]
-    #     )
-    #
-    # skip = mine_skip(net, start_place, end_place)
-    # if skip:
-    #     return __translate_xor(
-    #         net, skip[0], skip[1], skip[2]
-    #     )
 
     reachability_map = get_simplified_reachability_graph(net)
 
@@ -76,16 +66,7 @@ def __translate_petri_to_powl(
         f"Failed to detected a POWL structure over the following transitions: {net.transitions}"
     )
 
-
-def __validate_partial_order(po: StrictPartialOrder):
-    po.order.add_transitive_edges()
-    if po.order.is_irreflexive():
-        return po
-    else:
-        raise Exception("Conversion failed!")
-
-
-def __translate_to_binary_relation(
+def __translate_to_relation(
     net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place, enforce_unique_connection_points
 ):
 
@@ -94,7 +75,8 @@ def __translate_to_binary_relation(
 
     group_start_places = {g: set() for g in groups}
     group_end_places = {g: set() for g in groups}
-    temp_po = BinaryRelation(groups)
+
+    group_edges = set()
     start_groups = set()
     end_groups = set()
 
@@ -122,7 +104,7 @@ def __translate_to_binary_relation(
             for t2 in targets:
                 group_2 = transition_to_group_map[t2]
                 if group_1 != group_2:
-                    temp_po.add_edge(group_1, group_2)
+                    group_edges.add((group_1, group_2))
                     group_end_places[group_1].add(p)
                     group_start_places[group_2].add(p)
 
@@ -138,28 +120,27 @@ def __translate_to_binary_relation(
         group_to_powl_map[group] = child
         children.append(child)
 
-    rel = BinaryRelation(children)
-    for source in temp_po.nodes:
-        new_source = group_to_powl_map[source]
-        for target in temp_po.nodes:
-            if temp_po.is_edge(source, target):
-                new_target = group_to_powl_map[target]
-                rel.add_edge(new_source, new_target)
-    return rel, [group_to_powl_map[g] for g in start_groups], [group_to_powl_map[g] for g in end_groups]
+    child_edges = [
+        (group_to_powl_map[g1], group_to_powl_map[g2]) for (g1, g2) in group_edges
+    ]
+
+    start_nodes = [group_to_powl_map[g] for g in start_groups]
+    end_nodes = [group_to_powl_map[g] for g in end_groups]
+
+    return children, child_edges, start_nodes, end_nodes
 
 
 def __translate_partial_order(
     net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place
 ):
 
-    rel, _, _ = __translate_to_binary_relation(net,
-                                               transition_groups,
-                                               i_place,
-                                               f_place,
-                                               enforce_unique_connection_points=False)
-    po = StrictPartialOrder(rel.nodes)
-    po.order = rel
-    po = __validate_partial_order(po)
+    children, edges, _, _ = __translate_to_relation(net,
+                                                    transition_groups,
+                                                    i_place,
+                                                    f_place,
+                                                    enforce_unique_connection_points=False)
+    po = PartialOrder(nodes=children, edges=edges)
+    po.validate_and_remove_transitive_edges()
     return po
 
 
@@ -167,12 +148,17 @@ def __translate_choice_graph(
     net, transition_groups, i_place: PetriNet.Place, f_place: PetriNet.Place
 ):
 
-    rel, start_nodes, end_nodes = __translate_to_binary_relation(net,
-                                                                 transition_groups,
-                                                                 i_place,
-                                                                 f_place,
-                                                                 enforce_unique_connection_points=True)
-    cg = DecisionGraph(rel, start_nodes=start_nodes, end_nodes=end_nodes, empty_path=False)
+    children, edges, start_nodes, end_nodes = __translate_to_relation(net,
+                                                                      transition_groups,
+                                                                      i_place,
+                                                                      f_place,
+                                                                      enforce_unique_connection_points=True)
+    cg = ChoiceGraph(
+        nodes=children,
+        edges=edges,
+        start_nodes=start_nodes,
+        end_nodes=end_nodes,
+    )
     cg.validate_connectivity()
     return cg
 
@@ -186,29 +172,5 @@ def __create_sub_powl_model(
     subnet, subnet_start_place, subnet_end_place = clone_subnet(
         net, branch, start_place, end_place
     )
-    powl = __translate_petri_to_powl(subnet, subnet_start_place, subnet_end_place)
-    return powl
-
-
-def __translate_self_loop(
-    net: PetriNet,
-    do_nodes,
-    redo_nodes,
-    start_place: PetriNet.Place,
-    end_place: PetriNet.Place,
-) -> OperatorPOWL:
-    do_powl = __create_sub_powl_model(net, do_nodes, start_place, end_place)
-    redo_powl = __create_sub_powl_model(net, redo_nodes, end_place, start_place)
-    loop_operator = OperatorPOWL(operator=Operator.LOOP, children=[do_powl, redo_powl])
-    return loop_operator
-
-
-def __translate_xor(
-    net: PetriNet,
-    children,
-    start_place: PetriNet.Place,
-    end_place: PetriNet.Place,
-) -> OperatorPOWL:
-    submodel = __create_sub_powl_model(net, children, start_place, end_place)
-    xor_operator = OperatorPOWL(operator=Operator.XOR, children=[submodel, SilentTransition()])
-    return xor_operator
+    powl_model = __translate_petri_to_powl(subnet, subnet_start_place, subnet_end_place)
+    return powl_model

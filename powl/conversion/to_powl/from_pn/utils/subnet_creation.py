@@ -2,7 +2,8 @@ from typing import Set, Union
 
 from pm4py.objects.petri_net.obj import PetriNet
 from pm4py.objects.petri_net.utils import petri_utils as pn_util
-from powl.objects.obj import SilentTransition, Transition
+
+from powl.objects.tagged_powl.activity import Activity
 
 
 def id_generator():
@@ -142,9 +143,9 @@ def add_arc_from_to(
     target.in_arcs.add(arc)
 
 
-def pn_transition_to_powl(transition: PetriNet.Transition) -> Transition:
+def pn_transition_to_powl(transition: PetriNet.Transition) -> Activity:
     label = transition.label
     if label:
-        return Transition(label=label)
+        return Activity(label=label)
     else:
-        return SilentTransition()
+        return Activity()

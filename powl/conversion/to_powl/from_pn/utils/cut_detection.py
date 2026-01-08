@@ -3,7 +3,7 @@ from copy import copy
 from pm4py.objects.petri_net.obj import PetriNet
 from pm4py.objects.petri_net.utils import petri_utils as pn_util
 
-from powl.conversion.to_powl.from_pn.utils.subnet_creation import pn_transition_to_powl, add_arc_from_to, clone_place
+from powl.conversion.to_powl.from_pn.utils.subnet_creation import pn_transition_to_powl
 from powl.conversion.to_powl.from_pn.utils.weak_reachability import (
     get_reachable_without_looping,
 )
