@@ -13,8 +13,12 @@ def id_generator():
         count += 1
 
 
-def clone_place(net, place, node_map):
-    cloned_place = PetriNet.Place(f"{place.name}_cloned")
+def clone_place(net, place, node_map, cloned_place_name=None):
+    if cloned_place_name is not None:
+        new_name = str(cloned_place_name)
+    else:
+        new_name = place.name
+    cloned_place = PetriNet.Place(new_name)
     net.places.add(cloned_place)
     node_map[place] = cloned_place
     return cloned_place
@@ -22,7 +26,7 @@ def clone_place(net, place, node_map):
 
 def clone_transition(net, transition, node_map):
     cloned_transition = PetriNet.Transition(
-        f"{transition.name}_cloned", transition.label
+        transition.name, transition.label
     )
     net.transitions.add(cloned_transition)
     node_map[transition] = cloned_transition
