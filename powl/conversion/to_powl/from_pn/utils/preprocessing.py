@@ -7,7 +7,7 @@ from pm4py.objects.petri_net.utils import petri_utils as pn_util
 
 from powl.conversion.to_powl.from_pn.utils.subnet_creation import (
     add_arc_from_to,
-    id_generator, clone_place,
+    id_generator,
 )
 
 
@@ -279,7 +279,8 @@ def is_silent(transition) -> bool:
 def make_self_loop_explicit(net: PetriNet, start_place: PetriNet.Place, end_place: PetriNet.Place):
     if start_place == end_place:
         place = start_place
-        place_copy = clone_place(net, place, {})
+        place_copy = PetriNet.Place(f"{place.name}_cloned")
+        net.places.add(place_copy)
         out_arcs = place.out_arcs
         for arc in list(out_arcs):
             target = arc.target

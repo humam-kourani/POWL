@@ -17,6 +17,7 @@ from powl.conversion.to_powl.from_pn.utils.weak_reachability import (
     get_simplified_reachability_graph,
 )
 from powl.objects.obj import POWL
+from powl.objects.tagged_powl.activity import Activity
 from powl.objects.tagged_powl.base import TaggedPOWL
 from powl.objects.tagged_powl.choice_graph import ChoiceGraph
 from powl.objects.tagged_powl.partial_order import PartialOrder
@@ -61,7 +62,6 @@ def __translate_petri_to_powl(
     if len(partition) > 1:
         return __translate_choice_graph(net, partition, start_place, end_place)
 
-
     raise Exception(
         f"Failed to detected a POWL structure over the following transitions: {net.transitions}"
     )
@@ -76,35 +76,53 @@ def __translate_to_relation(
     group_start_places = {g: set() for g in groups}
     group_end_places = {g: set() for g in groups}
 
-    group_edges = set()
+    connection_edges = set()
     start_groups = set()
     end_groups = set()
 
+    complex_places = set()
+
     for p in net.places:
-        sources = {arc.source for arc in p.in_arcs}
-        targets = {arc.target for arc in p.out_arcs}
+        source_groups = {transition_to_group_map[arc.source] for arc in p.in_arcs}
+        target_groups = {transition_to_group_map[arc.target] for arc in p.out_arcs}
+
+        is_complex = (
+                enforce_unique_connection_points
+                and len(source_groups) > 1
+                and len(target_groups) > 1
+        )
+
+        if is_complex:
+            complex_places.add(p)
 
         # if p is start place and (p -> t), then p should be a start place in the subnet that contains t
         if p == i_place:
-            for t in targets:
-                group = transition_to_group_map[t]
+            if is_complex:
+                start_groups.add(p)
+            for group in target_groups:
                 group_start_places[group].add(p)
-                start_groups.add(group)
+                if not is_complex:
+                    start_groups.add(group)
         # if p is end place and (t -> p), then p should be end place in the subnet that contains t
         if p == f_place:
-            for t in sources:
-                group = transition_to_group_map[t]
+            if is_complex:
+                end_groups.add(p)
+            for group in source_groups:
                 group_end_places[group].add(p)
-                end_groups.add(group)
+                if not is_complex:
+                    end_groups.add(group)
 
         # if (t1 -> p -> t2) and t1 and t2 are in different subsets, then add an edge in the partial order
         # and set p as end place in g1 and as start place in g2
-        for t1 in sources:
-            group_1 = transition_to_group_map[t1]
-            for t2 in targets:
-                group_2 = transition_to_group_map[t2]
+        for group_1 in source_groups:
+            for group_2 in target_groups:
                 if group_1 != group_2:
-                    group_edges.add((group_1, group_2))
+                    if is_complex:
+                        connection_edges.add((group_1, p))
+                        connection_edges.add((p, group_2))
+                    else:
+                        connection_edges.add((group_1, group_2))
+
                     group_end_places[group_1].add(p)
                     group_start_places[group_2].add(p)
 
@@ -120,8 +138,13 @@ def __translate_to_relation(
         group_to_powl_map[group] = child
         children.append(child)
 
+    for group in complex_places:
+        child = Activity(label=None)
+        group_to_powl_map[group] = child
+        children.append(child)
+
     child_edges = [
-        (group_to_powl_map[g1], group_to_powl_map[g2]) for (g1, g2) in group_edges
+        (group_to_powl_map[g1], group_to_powl_map[g2]) for (g1, g2) in connection_edges
     ]
 
     start_nodes = [group_to_powl_map[g] for g in start_groups]
