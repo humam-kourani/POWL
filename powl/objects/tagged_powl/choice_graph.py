@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional, Set, Tuple, List
+from typing import Any, Iterable, Optional, Set, Tuple
 
 import networkx as nx
 
@@ -10,6 +10,7 @@ from .graph_base import GraphBacked
 from .base import TaggedPOWL
 from .partial_order import PartialOrder
 from .types import ModelType
+from ..utils.graph_sequentialization import split_graph_into_stages
 
 
 # Internal nodes (not TaggedPOWL; users shouldn't ever touch them)
@@ -23,7 +24,6 @@ class _ChoiceGraphStart:
 class _ChoiceGraphEnd:
     def __repr__(self) -> str:
         return "_ChoiceGraphEnd()"
-
 
 class ChoiceGraph(GraphBacked):
     """
@@ -102,20 +102,12 @@ class ChoiceGraph(GraphBacked):
     def successors(self, node: TaggedPOWL) -> Set[TaggedPOWL]:
         return {s for s in self._g.successors(node) if isinstance(s, TaggedPOWL)}
 
-    def boundary_edges(self) -> Set[Tuple[object, object]]:
-        """Edges involving START or END (useful for debugging/visualization)."""
-        out: Set[Tuple[object, object]] = set()
-        for u, v in self._g.edges:
-            if u in (self._start, self._end) or v in (self._start, self._end):
-                out.add((u, v))
-        return out
-
     # --- start/end management ---
     def start_nodes(self) -> Set[TaggedPOWL]:
-        return {v for v in self._g.successors(self._start)}
+        return {v for v in self._g.successors(self._start) if isinstance(v, TaggedPOWL)}
 
     def end_nodes(self) -> Set[TaggedPOWL]:
-        return {u for u in self._g.predecessors(self._end)}
+        return {u for u in self._g.predecessors(self._end) if isinstance(u, TaggedPOWL)}
 
     def is_start(self, node: TaggedPOWL) -> bool:
         return self._g.has_edge(self._start, node)
@@ -162,7 +154,6 @@ class ChoiceGraph(GraphBacked):
         )
 
     def clone(self, *, deep: bool = True) -> "ChoiceGraph":
-        # Rebuild while preserving start/end marks and user edges
         new = ChoiceGraph(
             nodes=self.get_nodes(),
             edges=self.get_edges(),
@@ -193,215 +184,282 @@ class ChoiceGraph(GraphBacked):
 
     def reduce_silent_activities(self) -> TaggedPOWL:
         """
-        Reduce silent Activity nodes ONLY when they have exactly one incoming
-        arc and one outgoing arc (considering START/END boundary arcs too).
-
-        For such a node τ with pred -> τ -> succ, add pred -> succ and remove τ.
+        Reduces silent activities by merging redundant edges, handling global self-loops,
+        and abstracting isolated subgraphs that are dominated by a silent loop transition.
         """
-        old_nodes = list(self.get_nodes())
-        node_map = {n: n.reduce_silent_activities() for n in old_nodes}
 
-        new = ChoiceGraph(
-            nodes=node_map.values(),
-            edges=((node_map[u], node_map[v]) for (u, v) in self.get_edges()),
-            start_nodes=(node_map[n] for n in self.start_nodes()),
-            end_nodes=(node_map[n] for n in self.end_nodes()),
-            min_freq=self.min_freq,
-            max_freq=self.max_freq,
-        )
+        # 1. Trivial leaf self-loops
+        for (u, v) in self.get_edges():
+            if u == v:
+                self.remove_edge(u, v)
+                u.max_freq = None
 
-        node_map[self._start] = new._start
-        node_map[self._end] = new._end
+        # 2. Recursively reduce children first
+        node_map = {n: n.reduce_silent_activities() for n in self.get_nodes()}
+        self._map_graph(node_map)
 
-        def is_silent_activity(n: object) -> bool:
+        def is_silent(n: Any) -> bool:
             return isinstance(n, Activity) and n.is_silent()
 
         changed = True
         while changed:
+
             changed = False
-            silent_nodes = [n for n in list(new.get_nodes()) if is_silent_activity(n)]
-            if not silent_nodes:
-                break
+            silent_nodes = [n for n in self.get_nodes() if is_silent(n)]
 
             for tau in silent_nodes:
 
-                preds = list(new._g.predecessors(tau))
-                succs = list(new._g.successors(tau))
+                if tau not in self._g.nodes:
+                    continue
 
-                # if len(preds) == 1 == len(succs):
+                preds = set(self._g.predecessors(tau))
+                succs = set(self._g.successors(tau))
+
+                # --- A: Simple Reduction (1-in or 1-out) --:
                 if len(preds) <= 1 or len(succs) <= 1:
-                    for p in preds:
-                        for s in succs:
-                            # p = preds[0]
-                            # s = succs[0]
-                            if p is new._start and s is new._end:
-                                new.min_freq = 0
-                            elif p is new._end and s is new._start:
-                                new.max_freq = None
-                            elif p == s:
-                                p.max_freq = None
-                            else:
-                                new._g.add_edge(p, s)
-
-                    new._g.remove_node(tau)
+                    self._bypass_silent_node(tau, preds, succs)
                     changed = True
+
+                # --- B: Loops ---
                 else:
-                    shared = {n for n in preds if n in succs}
-                    if len(shared) == 1:
-                        shared_node = shared.pop()
-                        if shared_node not in silent_nodes:
-                            preds_shared = list(new._g.predecessors(shared_node))
-                            succs_shared = list(new._g.successors(shared_node))
+                    start_nodes = set(self._g.successors(self._start))
+                    end_nodes = set(self._g.predecessors(self._end))
 
-                            if {n for n in preds_shared if n in succs_shared} == {tau}:
-                                shared_node.min_freq = 0
-                                shared_node.max_freq = None
-                                for p in set(preds) - {shared_node}:
-                                    new._g.add_edge(p, shared_node)
-                                for s in set(succs) - {shared_node}:
-                                    new._g.add_edge(shared_node, s)
-                                new._g.remove_node(tau)
-                                changed = True
+                    # B1: Global Skippable Self-Loop (Start -> tau -> End)
+                    if start_nodes == {tau} == end_nodes:
+                        self._g.remove_node(tau)
+                        self.min_freq = 0
+                        self.max_freq = None
+                        for p in preds - {self._start}:
+                            self.mark_end(p)
+                        for s in succs - {self._end}:
+                            self.mark_start(s)
+                        changed = True
+
+                    # B2: Global Non-Skippable Self-Loop
+                    elif preds == end_nodes and succs == start_nodes:
+                        self._g.remove_node(tau)
+                        self.max_freq = None
+                        changed = True
+
+                    # B3: Isolated Loop Subgraph
+                    else:
+                        loop_body = self._find_loop_body(tau)
+                        if loop_body:
+                            self._abstract_loop_subgraph(tau, loop_body, preds, succs)
+                            changed = True
+
+        # 3. Final flattening
+        if len(self.get_nodes()) == 1:
+            return self._flatten_single_node()
+
+        return self._abstract_sequences()
 
 
+    def _abstract_self_loop(self) -> None:
 
-        if len(new.get_nodes()) == 1:
-            assert len(new._g.edges) == 2
-            remaining_node = new.get_nodes().pop()
-            remaining_node.min_freq = min(remaining_node.min_freq, new.min_freq)
-            if remaining_node.max_freq is None or new.max_freq is None:
-                remaining_node.max_freq = None
-            else:
-                remaining_node.max_freq = max(new.max_freq, remaining_node.max_freq)
-            return remaining_node
+        silent_nodes = [n for n in self.get_nodes() if isinstance(n, Activity) and n.is_silent()]
+        start_nodes = set(self._g.successors(self._start))
+        end_nodes = set(self._g.predecessors(self._end))
 
-        return new.abstract_head_tail_sequences()
+        for tau in silent_nodes:
 
-    def abstract_head_tail_sequences(self) -> TaggedPOWL:
+            preds = set(self._g.predecessors(tau))
+            succs = set(self._g.successors(tau))
+
+            if preds == end_nodes and succs == start_nodes:
+                self._g.remove_node(tau)
+                self.max_freq = None
+                return
+
+        edges = self._g.edges()
+
+        back_edges = []
+        for u in end_nodes:
+            for v in start_nodes:
+                if (u, v) in edges:
+                    back_edges.append((u, v))
+                else:
+                    return
+
+        if back_edges:
+            self.max_freq = None
+            self._g.remove_edges_from(back_edges)
+        else:
+            raise ValueError("This code should be unreachable!")
+
+    def _abstract_sequences(self) -> TaggedPOWL:
         """
-        Turn this ChoiceGraph into a PartialOrder consisting of:
-          [head_seq_nodes..., middle_choice_graph, tail_seq_nodes...]
+        General sequential chunking for ChoiceGraph using dominators/post-dominators.
 
-        - head_seq_nodes: maximal deterministic chain from START
-        - tail_seq_nodes: maximal deterministic chain into END
-        - middle_choice_graph: the remaining ChoiceGraph after peeling head/tail
+        Produces a sequential PartialOrder:
+            chunk1 -> chunk2 -> chunk3 -> ...
 
-        If the whole model is pure sequential, returns a PartialOrder over all user nodes/edges.
+        Each chunk may itself be complex (ChoiceGraph / PartialOrder / etc.).
+        This is a generalization of head/tail peeling.
+
+        Efficiency notes:
+        - Uses dominator spines and a monotone assignment to avoid O(V * spine) scanning.
+        - Avoids cloning nodes; builds induced subgraphs using original TaggedPOWL objects.
+        - Merges away trivial boundary regions caused by artificial START/END nodes.
         """
 
-        # ---- collect prefix from START ----
-        head: List[TaggedPOWL] = []
-        cur: object = self._start
+        self._abstract_self_loop()
 
-        while self._g.out_degree(cur) == 1:
-            nxt = next(iter(self._g.successors(cur)))
+        G = self._g
+        START = self._start
+        END = self._end
+        stages, is_skippable = split_graph_into_stages(G, START, END)
+        if len(stages) < 2:
+            raise Exception("Something went wrong!")
+        if {START} != stages[0] or {END} != stages[-1]:
+            raise Exception("Something went wrong!")
+        stages = stages[1:-1]
+        is_skippable = is_skippable[1:-1]
 
-            # Pure Concurrency
-            if nxt is self._end:
-                assert len(head) == len(self.get_nodes())
-                po = PartialOrder(
-                    nodes=list(self.get_nodes()),
-                    edges=list(self.get_edges()),
-                    min_freq=self.min_freq,
-                    max_freq=self.max_freq,
-                )
-                return po
-
-            head.append(nxt)
-            cur = nxt
-
-        # ---- collect suffix into END ----
-        tail: List[TaggedPOWL] = []
-        cur = self._end
-        while self._g.in_degree(cur) == 1:
-            prev = next(iter(self._g.predecessors(cur)))
-            if prev is self._start:
-                break
-            tail.insert(0, prev)
-            cur = prev
-
-
-        shared = [n for n in head if n in tail]
-        if len(shared) > 0:
-            # This may happen in case of a loop
-            assert len(shared) == 1
-            shared_node = list(shared)[0]
-            assert shared_node == head[-1] == tail[0]
-            head = head[:-1]
-            tail = tail[1:]
-
-        head_set = set(head)
-        tail_set = set(tail)
-
-        assert len(head_set | tail_set) < len(self.get_nodes())
-
-        if len(head) == 0 and len(tail) == 0:
+        if len(stages) < 2:
             return self
 
-        middle_nodes = [n for n in self.get_nodes() if n not in head_set and n not in tail_set]
+        def build_chunk(chunk_nodes: set[TaggedPOWL], skippable_chunk: bool) -> TaggedPOWL:
 
-        middle_edges = [
-            (u, v)
-            for (u, v) in self.get_edges()
-            if (u not in head_set and v not in head_set and u not in tail_set and v not in tail_set)
-        ]
+            if len(chunk_nodes) == 1:
+                chunk_node = chunk_nodes.pop()
+                if skippable_chunk:
+                    chunk_node.min_freq = 0
+                return chunk_node
 
-        middle_empty_path = False
+            chunk_edges = [(u, v) for (u, v) in self.get_edges() if u in chunk_nodes and v in chunk_nodes]
 
-        # start nodes for middle:
-        if head:
-            last_head = head[-1]
-            middle_start_nodes = [
-                x for x in self.successors(last_head)
-            ]
-            if not tail:
-                middle_empty_path = self._g.has_edge(last_head, self._end)
-        else:
-            middle_start_nodes = {n for n in self.start_nodes() if n in middle_nodes}
+            chunk_start: set[TaggedPOWL] = set()
+            chunk_end: set[TaggedPOWL] = set()
 
-        # end nodes for middle:
-        if tail:
-            first_tail = tail[0]
-            middle_end_nodes = [
-                x for x in self.predecessors(first_tail)
-            ]
-            if head:
-                middle_empty_path = self._g.has_edge(head[-1], first_tail)
-            else:
-                middle_empty_path = self._g.has_edge(self._start, first_tail)
-        else:
-            middle_end_nodes = {n for n in self.end_nodes() if n in middle_nodes}
+            for n in chunk_nodes:
+                preds = list(G.predecessors(n))
+                succs = list(G.successors(n))
 
+                if any(p not in chunk_nodes for p in preds):
+                    chunk_start.add(n)
+                if any(s not in chunk_nodes for s in succs):
+                    chunk_end.add(n)
 
-        if len(middle_nodes) == 1:
-            middle = middle_nodes[0].clone(deep=True)
-            if middle_empty_path:
-                middle.min_freq = 0
-        else:
-            middle_min_freq = 0 if middle_empty_path else 1
-            middle = ChoiceGraph(
-                nodes=middle_nodes,
-                edges=middle_edges,
-                start_nodes=middle_start_nodes,
-                end_nodes=middle_end_nodes,
-                min_freq=middle_min_freq,
+            sub = ChoiceGraph(
+                nodes=chunk_nodes,
+                edges=chunk_edges,
+                start_nodes=chunk_start,
+                end_nodes=chunk_end,
+                min_freq= 0 if skippable_chunk else 1,
                 max_freq=1,
             )
-            middle = middle.abstract_head_tail_sequences()
 
-        # ---------- wrap into PartialOrder: head -> middle -> tail ----------
-        seq_nodes: List[TaggedPOWL] = []
-        seq_nodes.extend(head)
-        seq_nodes.append(middle)
-        seq_nodes.extend(tail)
+            return sub._abstract_sequences()
 
-        seq_edges = [(seq_nodes[i], seq_nodes[i + 1]) for i in range(len(seq_nodes) - 1)]
+        chunks: list[TaggedPOWL] = [build_chunk(stages[i], is_skippable[i]) for i in range(len(stages))]
 
-        po = PartialOrder(
-            nodes=seq_nodes,
-            edges=seq_edges,
+        po_edges = [(chunks[i], chunks[i + 1]) for i in range(len(chunks) - 1)]
+        return PartialOrder(
+            nodes=chunks,
+            edges=po_edges,
             min_freq=self.min_freq,
             max_freq=self.max_freq,
         )
 
-        return po
+    def _flatten_single_node(self):
+        assert len(self._g.edges) == 2  # assuming leaf-level self-loops were abstracted before
+        remaining_node = self.get_nodes().pop()
+        remaining_node.min_freq = min(remaining_node.min_freq, self.min_freq)
+        if remaining_node.max_freq is None or self.max_freq is None:
+            remaining_node.max_freq = None
+        else:
+            remaining_node.max_freq = max(self.max_freq, remaining_node.max_freq)
+        return remaining_node
+
+    def _bypass_silent_node(self, tau: TaggedPOWL, preds: Set[TaggedPOWL], succs: Set[TaggedPOWL]) -> None:
+        """Removes tau and connects preds directly to succs."""
+        for p in preds:
+            for s in succs:
+                if p is self._start and s is self._end:
+                    self.min_freq = 0
+                elif p is self._end or s is self._start:
+                    raise ValueError("This code should be unreachable!")
+                elif p == s:
+                    p.max_freq = None  # Collapse local loop
+                else:
+                    self._g.add_edge(p, s)
+
+        self._g.remove_node(tau)
+
+    def _find_loop_body(self, tau: TaggedPOWL) -> Optional[Set[TaggedPOWL]]:
+        """
+        Finds a loop body where 'tau' is the unique entry and exit.
+        Optimization: Uses intersection of descendants/ancestors instead of full SCCs.
+        """
+        # 1. Identify the SCC containing tau via set intersection
+        body = nx.descendants(self._g, tau) & nx.ancestors(self._g, tau)
+
+        if not body:
+            return None
+
+        # 2. Verify Isolation (Tau must be the ONLY gateway)
+        for n in body:
+            if any(p not in body and p is not tau for p in self._g.predecessors(n)):
+                return None
+
+            if any(s not in body and s is not tau for s in self._g.successors(n)):
+                return None
+
+        return body
+
+    def _abstract_loop_subgraph(self, tau: TaggedPOWL, body: Set[TaggedPOWL],
+                                preds: Set[TaggedPOWL], succs: Set[TaggedPOWL]) -> None:
+        """Extracts 'body' into a new nested ChoiceGraph (0..*) and replaces it."""
+
+        if len(body) == 1:
+            new_node = body.pop()
+            new_node.min_freq = 0
+            new_node.max_freq = None
+        else:
+            sub_start = body.intersection(succs)
+            sub_end = body.intersection(preds)
+            sub_edges = [(u, v) for u, v in self.get_edges() if u in body and v in body]
+            new_node = ChoiceGraph(
+                nodes=body,
+                edges=sub_edges,
+                start_nodes=sub_start,
+                end_nodes=sub_end,
+                min_freq=0,
+                max_freq=None
+            )
+
+        # Recurse immediately
+        new_node = new_node.reduce_silent_activities()
+
+        # Wire into parent
+        for p in preds - body:
+            self._g.add_edge(p, new_node)
+        for s in succs - body:
+            self._g.add_edge(new_node, s)
+        self._g.remove_nodes_from(body)
+        self._g.remove_node(tau)
+
+    def _map_graph(self, node_map: dict) -> None:
+        """Refreshes the internal graph structure based on a node mapping."""
+        new_nodes = list(node_map.values())
+        new_edges = [(node_map[u], node_map[v]) for u, v in self.get_edges()]
+        old_start = self.start_nodes()
+        old_end = self.end_nodes()
+
+        self._g = nx.DiGraph()
+        self._g.add_node(self._start)
+        self._g.add_node(self._end)
+        self.add_nodes(new_nodes)
+        self.add_edges(new_edges)
+
+        for n in old_start:
+            self.mark_start(node_map[n])
+        for n in old_end:
+            self.mark_end(node_map[n])
+
+
+
+
+
