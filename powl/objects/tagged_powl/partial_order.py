@@ -102,3 +102,64 @@ class PartialOrder(GraphBacked):
                     changed = True
 
         return new
+
+    def flatten(self) -> TaggedPOWL:
+
+        nodes = self.get_nodes()
+
+        if len(nodes) == 1:
+
+            node = list(nodes)[0]
+            node.min_freq = min(self.min_freq, node.min_freq)
+            if node.max_freq is None or self.max_freq is None:
+                node.max_freq = None
+            else:
+                node.max_freq = max(self.max_freq, node.max_freq)
+            if isinstance(node, PartialOrder):
+                node = node.flatten()
+
+            return node
+
+        result = PartialOrder(
+            min_freq=self.min_freq,
+            max_freq=self.max_freq
+        )
+
+        entry_points: dict[TaggedPOWL, list[TaggedPOWL]] = {}
+        exit_points: dict[TaggedPOWL, list[TaggedPOWL]] = {}
+
+        for node in nodes:
+            if isinstance(node, PartialOrder) and node.min_freq == 1 == node.max_freq:
+                flat_child = node.flatten()
+
+                for child_node in flat_child.get_nodes():
+                    result.add_node(child_node)
+                for u, v in flat_child.get_edges():
+                    result.add_edge(u, v)
+
+                c_starts = [n for n in flat_child.get_nodes() if flat_child._g.in_degree(n) == 0]
+                c_ends = [n for n in flat_child.get_nodes() if flat_child._g.out_degree(n) == 0]
+
+                entry_points[node] = c_starts
+                exit_points[node] = c_ends
+            else:
+                result.add_node(node)
+                entry_points[node] = [node]
+                exit_points[node] = [node]
+
+        for u, v in self.get_edges():
+            u_exist_points = exit_points[u]
+            v_entry_points = entry_points[v]
+            if len(u_exist_points) > 1 and len(v_entry_points) > 1:
+                silent_connector = Activity(label=None)
+                result.add_node(silent_connector)
+                for u_exit in u_exist_points:
+                    result.add_edge(u_exit, silent_connector)
+                for v_entry in v_entry_points:
+                    result.add_edge(silent_connector, v_entry)
+            else:
+                for u_exit in u_exist_points:
+                    for v_entry in v_entry_points:
+                        result.add_edge(u_exit, v_entry)
+
+        return result
