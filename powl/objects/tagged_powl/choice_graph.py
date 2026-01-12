@@ -187,16 +187,29 @@ class ChoiceGraph(GraphBacked):
         Reduces silent activities by merging redundant edges, handling global self-loops,
         and abstracting isolated subgraphs that are dominated by a silent loop transition.
         """
-
         # 1. Trivial leaf self-loops
         for (u, v) in self.get_edges():
             if u == v:
                 self.remove_edge(u, v)
                 u.max_freq = None
 
-        # 2. Recursively reduce children first
+        self._reduce_simple_silent_transitions()
+        self._mark_skippable_nodes()
+
         node_map = {n: n.reduce_silent_activities() for n in self.get_nodes()}
         self._map_graph(node_map)
+        self._abstract_self_loop()
+        return self._apply_advanced_reductions()
+
+    def _apply_advanced_reductions(self) -> "TaggedPOWL":
+        if len(self.get_nodes()) == 1:
+            return self._flatten_single_node()
+        self._abstract_sccs()
+        return self._abstract_sequences()
+
+
+    def _reduce_simple_silent_transitions(self):
+        # Simple Reduction (1-in or 1-out)
 
         def is_silent(n: Any) -> bool:
             return isinstance(n, Activity) and n.is_silent()
@@ -210,53 +223,39 @@ class ChoiceGraph(GraphBacked):
             for tau in silent_nodes:
 
                 if tau not in self._g.nodes:
-                    continue
+                    pass
 
                 preds = set(self._g.predecessors(tau))
                 succs = set(self._g.successors(tau))
 
-                # --- A: Simple Reduction (1-in or 1-out) --:
                 if len(preds) <= 1 or len(succs) <= 1:
                     self._bypass_silent_node(tau, preds, succs)
                     changed = True
 
-                # --- B: Loops ---
-                else:
-                    start_nodes = set(self._g.successors(self._start))
-                    end_nodes = set(self._g.predecessors(self._end))
 
-                    # B1: Global Skippable Self-Loop (Start -> tau -> End)
-                    if start_nodes == {tau} == end_nodes:
-                        self._g.remove_node(tau)
-                        self.min_freq = 0
-                        self.max_freq = None
-                        for p in preds - {self._start}:
-                            self.mark_end(p)
-                        for s in succs - {self._end}:
-                            self.mark_start(s)
-                        changed = True
+    def _mark_skippable_nodes(self):
+        changed = True
+        while changed:
+            edges_to_remove = set()
+            changed = False
+            current_edges = list(self._g.edges)
 
-                    # B2: Global Non-Skippable Self-Loop
-                    elif preds == end_nodes and succs == start_nodes:
-                        self._g.remove_node(tau)
-                        self.max_freq = None
-                        changed = True
+            for node in self.get_nodes():
 
-                    # B3: Isolated Loop Subgraph
-                    else:
-                        loop_body = self._find_loop_body(tau)
-                        if loop_body:
-                            self._abstract_loop_subgraph(tau, loop_body, preds, succs)
-                            changed = True
+                preds = set(self._g.predecessors(node))
+                succs = set(self._g.successors(node))
 
-        # 3. Final flattening
-        if len(self.get_nodes()) == 1:
-            return self._flatten_single_node()
+                if all((p, s) in current_edges for p in preds for s in succs):
+                    edges_to_remove.update({(p, s) for p in preds for s in succs})
+                    node.min_freq = 0
 
-        return self._abstract_sequences()
+            if edges_to_remove:
+                self._g.remove_edges_from(edges_to_remove)
+                changed = True
 
 
-    def _abstract_self_loop(self) -> None:
+    def _abstract_self_loop(self) -> bool:
+
 
         silent_nodes = [n for n in self.get_nodes() if isinstance(n, Activity) and n.is_silent()]
         start_nodes = set(self._g.successors(self._start))
@@ -267,10 +266,23 @@ class ChoiceGraph(GraphBacked):
             preds = set(self._g.predecessors(tau))
             succs = set(self._g.successors(tau))
 
-            if preds == end_nodes and succs == start_nodes:
+            # Skippable Self-Loop
+            if start_nodes == {tau} == end_nodes:
+                self._g.remove_node(tau)
+                self.min_freq = 0
+                self.max_freq = None
+                for p in preds - {self._start}:
+                    self.mark_end(p)
+                for s in succs - {self._end}:
+                    self.mark_start(s)
+                return True
+
+            # Non-Skippable Self-Loop
+            elif preds == end_nodes and succs == start_nodes:
                 self._g.remove_node(tau)
                 self.max_freq = None
-                return
+                return True
+
 
         edges = self._g.edges()
 
@@ -280,11 +292,12 @@ class ChoiceGraph(GraphBacked):
                 if (u, v) in edges:
                     back_edges.append((u, v))
                 else:
-                    return
+                    return False
 
         if back_edges:
             self.max_freq = None
             self._g.remove_edges_from(back_edges)
+            return True
         else:
             raise ValueError("This code should be unreachable!")
 
@@ -355,13 +368,16 @@ class ChoiceGraph(GraphBacked):
 
         chunks: list[TaggedPOWL] = [build_chunk(stages[i], is_skippable[i]) for i in range(len(stages))]
 
+        chunks = [c for c in chunks if not (isinstance(c, Activity) and c.is_silent())]
+
         po_edges = [(chunks[i], chunks[i + 1]) for i in range(len(chunks) - 1)]
+
         return PartialOrder(
             nodes=chunks,
             edges=po_edges,
             min_freq=self.min_freq,
             max_freq=self.max_freq,
-        )
+        ).flatten()
 
     def _flatten_single_node(self):
         assert len(self._g.edges) == 2  # assuming leaf-level self-loops were abstracted before
@@ -388,58 +404,125 @@ class ChoiceGraph(GraphBacked):
 
         self._g.remove_node(tau)
 
-    def _find_loop_body(self, tau: TaggedPOWL) -> Optional[Set[TaggedPOWL]]:
+    def _abstract_sccs(self):
         """
-        Finds a loop body where 'tau' is the unique entry and exit.
-        Optimization: Uses intersection of descendants/ancestors instead of full SCCs.
+        Detects Strongly Connected Components (SCCs).
+        If an SCC has size > 1, and has a unique/complete entry set and exit set,
+        it abstracts the SCC into a nested ChoiceGraph.
         """
-        # 1. Identify the SCC containing tau via set intersection
-        body = nx.descendants(self._g, tau) & nx.ancestors(self._g, tau)
 
-        if not body:
-            return None
+        sccs = list(nx.strongly_connected_components(self._g))
 
-        # 2. Verify Isolation (Tau must be the ONLY gateway)
-        for n in body:
-            if any(p not in body and p is not tau for p in self._g.predecessors(n)):
-                return None
+        valid_abstractions = []
+        nodes_to_abstract = set()
 
-            if any(s not in body and s is not tau for s in self._g.successors(n)):
-                return None
+        for scc in sccs:
 
-        return body
+            if len(scc) <= 1:
+                continue
 
-    def _abstract_loop_subgraph(self, tau: TaggedPOWL, body: Set[TaggedPOWL],
-                                preds: Set[TaggedPOWL], succs: Set[TaggedPOWL]) -> None:
-        """Extracts 'body' into a new nested ChoiceGraph (0..*) and replaces it."""
+            if self._start in scc or self._end in scc:
+                raise ValueError("This code should be unreachable!")
 
-        if len(body) == 1:
-            new_node = body.pop()
-            new_node.min_freq = 0
-            new_node.max_freq = None
-        else:
-            sub_start = body.intersection(succs)
-            sub_end = body.intersection(preds)
-            sub_edges = [(u, v) for u, v in self.get_edges() if u in body and v in body]
-            new_node = ChoiceGraph(
-                nodes=body,
+            A = set()  # Outside Sources
+            B = set()  # Inside Entries
+            edges_in_count = 0
+
+            C = set()  # Inside Exits
+            D = set()  # Outside Targets
+            edges_out_count = 0
+
+            for (u, v) in self._g.edges:
+                if u not in scc and v in scc:
+                    A.add(u)
+                    B.add(v)
+                    edges_in_count += 1
+                elif u in scc and v not in scc:
+                    C.add(u)
+                    D.add(v)
+                    edges_out_count += 1
+
+
+            # Check Condition: ALL nodes in C must connect to ALL nodes in D
+            if len(A) > 0 and len(B) > 0:
+                if edges_in_count != len(A) * len(B):
+                    continue
+            else:
+                raise ValueError("This code should be unreachable!")
+
+            # Check Exit Condition: Total Edges == |C| * |D|
+            if len(C) > 0 and len(D) > 0:
+                if edges_out_count != len(C) * len(D):
+                    continue
+            else:
+                raise ValueError("This code should be unreachable!")
+
+            valid_abstractions.append({
+                "nodes": scc,
+                "start_nodes": B,
+                "end_nodes": C
+            })
+            nodes_to_abstract.update(scc)
+
+        if not valid_abstractions:
+            return
+
+        replacement_map = {}
+
+        for item in valid_abstractions:
+            scc_nodes = item["nodes"]
+
+            sub_edges = []
+            for u in scc_nodes:
+                for v in self._g.successors(u):
+                    if v in scc_nodes:
+                        sub_edges.append((u, v))
+
+            sub_graph = self.__class__(
+                nodes=scc_nodes,
                 edges=sub_edges,
-                start_nodes=sub_start,
-                end_nodes=sub_end,
-                min_freq=0,
-                max_freq=None
+                start_nodes=item["start_nodes"],
+                end_nodes=item["end_nodes"],
+                min_freq=1,
+                max_freq=1,
             )
+            changed = sub_graph._abstract_self_loop()
+            if changed:
+                sub_graph = sub_graph._apply_advanced_reductions()
 
-        # Recurse immediately
-        new_node = new_node.reduce_silent_activities()
+            for n in scc_nodes:
+                replacement_map[n] = sub_graph
 
-        # Wire into parent
-        for p in preds - body:
-            self._g.add_edge(p, new_node)
-        for s in succs - body:
-            self._g.add_edge(new_node, s)
-        self._g.remove_nodes_from(body)
-        self._g.remove_node(tau)
+
+        new_edges = set()
+        nodes_to_keep = [n for n in self.get_nodes() if n not in nodes_to_abstract]
+
+        for u, v in self._g.edges:
+            u_new = replacement_map.get(u, u)
+            v_new = replacement_map.get(v, v)
+
+            if u_new is v_new:
+                if u in nodes_to_abstract:
+                    # Case A: Edge internal to an SCC being removed -> Discard
+                    continue
+                else:
+                    raise ValueError("This code should be unreachable!")
+            else:
+                new_edges.add((u_new, v_new))
+
+        self._g = nx.DiGraph()
+
+        for n in nodes_to_keep:
+            self.add_node(n)
+
+        added_replacements = set()
+        for sub in replacement_map.values():
+            if sub not in added_replacements:
+                self.add_node(sub)
+                added_replacements.add(sub)
+
+        self._g.add_edges_from(new_edges)
+
 
     def _map_graph(self, node_map: dict) -> None:
         """Refreshes the internal graph structure based on a node mapping."""
@@ -458,8 +541,3 @@ class ChoiceGraph(GraphBacked):
             self.mark_start(node_map[n])
         for n in old_end:
             self.mark_end(node_map[n])
-
-
-
-
-
