@@ -130,18 +130,25 @@ class PartialOrder(GraphBacked):
 
         for node in nodes:
             if isinstance(node, PartialOrder) and node.min_freq == 1 == node.max_freq:
+
                 flat_child = node.flatten()
 
-                for child_node in flat_child.get_nodes():
-                    result.add_node(child_node)
-                for u, v in flat_child.get_edges():
-                    result.add_edge(u, v)
+                if isinstance(flat_child, PartialOrder) and flat_child.min_freq == 1 == flat_child.max_freq:
 
-                c_starts = [n for n in flat_child.get_nodes() if flat_child._g.in_degree(n) == 0]
-                c_ends = [n for n in flat_child.get_nodes() if flat_child._g.out_degree(n) == 0]
+                    for child_node in flat_child.get_nodes():
+                        result.add_node(child_node)
+                    for u, v in flat_child.get_edges():
+                        result.add_edge(u, v)
 
-                entry_points[node] = c_starts
-                exit_points[node] = c_ends
+                    c_starts = [n for n in flat_child.get_nodes() if flat_child._g.in_degree(n) == 0]
+                    c_ends = [n for n in flat_child.get_nodes() if flat_child._g.out_degree(n) == 0]
+
+                    entry_points[node] = c_starts
+                    exit_points[node] = c_ends
+                else:
+                    result.add_node(flat_child)
+                    entry_points[node] = [flat_child]
+                    exit_points[node] = [flat_child]
             else:
                 result.add_node(node)
                 entry_points[node] = [node]
