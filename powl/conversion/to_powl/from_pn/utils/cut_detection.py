@@ -97,11 +97,9 @@ def mine_choice_graph(net):
         union_of_branches = set().union(*split_branches)
         intersection_of_branches = set.intersection(*split_branches)
         not_in_every_branch = union_of_branches - intersection_of_branches
-        if len(not_in_every_branch) > 1:
+        if len(not_in_every_branch) > 0:
             not_in_every_branch.add(split)
             partition = __combine_parts(not_in_every_branch, partition)
-        else:
-            raise Exception("This should not happen!")
 
     for join in join_transitions:
         pre_transitions = {join}
