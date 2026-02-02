@@ -5,7 +5,7 @@ from pm4py.objects.petri_net.utils import petri_utils as pn_util
 
 from powl.conversion.to_powl.from_pn.utils.subnet_creation import pn_transition_to_powl
 from powl.conversion.to_powl.from_pn.utils.weak_reachability import (
-    get_reachable_without_looping,
+    get_reachable_without_looping, get_backward_reachable_without_looping,
 )
 
 
@@ -121,10 +121,20 @@ def mine_choice_graph(net):
             partition = __combine_parts(not_in_every_branch, partition)
 
     for join in join_transitions:
-        pre_transitions = {join}
-        for pre_place in pn_util.pre_set(join):
-            pre_transitions = pre_transitions | pn_util.pre_set(pre_place)
-        partition = __combine_parts(pre_transitions, partition)
+        join_branches = []
+        for end_place in pn_util.pre_set(join):
+            new_branch = {
+                node
+                for node in get_backward_reachable_without_looping(end_place, join)
+                if isinstance(node, PetriNet.Transition)
+            }
+            join_branches.append(new_branch)
+        union_of_branches = set().union(*join_branches)
+        intersection_of_branches = set.intersection(*join_branches)
+        not_in_every_branch = union_of_branches - intersection_of_branches
+        if len(not_in_every_branch) > 0:
+            not_in_every_branch.add(join)
+            partition = __combine_parts(not_in_every_branch, partition)
 
     return partition
 

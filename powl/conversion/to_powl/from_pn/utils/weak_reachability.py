@@ -33,6 +33,19 @@ def get_reachable_without_looping(start_node, stop_node):
     return reachable
 
 
+def get_backward_reachable_without_looping(start_node, stop_node):
+    reachable = set()
+    queue = deque()
+    queue.append(start_node)
+    while queue:
+        node = queue.popleft()
+        if node != stop_node and node not in reachable:
+            reachable.add(node)
+            predecessors = pn_util.pre_set(node)
+            queue.extend(predecessors)
+    return reachable
+
+
 def get_reachable_transitions_from_place_to_another(
     start_place: PetriNet.Place, end_place: PetriNet.Place
 ):
