@@ -1,5 +1,4 @@
 import networkx as nx
-from collections import defaultdict
 
 
 def split_graph_into_stages(G: nx.DiGraph, START, END):
@@ -8,9 +7,9 @@ def split_graph_into_stages(G: nx.DiGraph, START, END):
     any valid path from START to END follows this order.
 
     1. Prunes the graph to valid paths only.
-    2. Condenses cycles (Strongly Connected Components) into super-nodes.
-    3. Uses Dominator Tree on the condensed DAG to find linear bottlenecks.
-    4. Groups remaining nodes into skippable stages between bottlenecks.
+    2. Uses Dominator Tree on the actual nodes to find the backbone.
+    3. Initially splits graph into backbone nodes and intermediate nodes.
+    4. Post-processes to merge stages that are part of a cycle.
 
     Guarantees: No edge exists from Stage[j] to Stage[i] where j > i.
     """
@@ -28,85 +27,145 @@ def split_graph_into_stages(G: nx.DiGraph, START, END):
 
     subgraph = G.subgraph(valid_nodes).copy()
 
-    # --- 2. Condensation: Convert to DAG of SCCs ---
-    G_condensed = nx.condensation(subgraph)
+    # --- 2. Dominators & Backbone (No SCC abstraction) ---
+    # Calculate immediate dominators on the pruned subgraph
+    idom = nx.immediate_dominators(subgraph, START)
 
-    node_to_scc_mapping = G_condensed.graph['mapping']
-    start_scc = node_to_scc_mapping[START]
-    end_scc = node_to_scc_mapping[END]
-
-
-    # --- 3. Dominators on the DAG ---
-    # Find immediate dominators in the condensed graph starting from start_scc
-    idom = nx.immediate_dominators(G_condensed, start_scc)
-
-    # Trace the backbone (Mandatory SCCs) from END back to START
-    backbone_sccs = []
-    curr = end_scc
-    while curr != start_scc:
-        backbone_sccs.append(curr)
+    # Trace the backbone (Mandatory Nodes) from END back to START
+    # The backbone consists of the 'bottleneck' nodes.
+    backbone_nodes = []
+    curr = END
+    while curr != START:
+        backbone_nodes.append(curr)
         if curr not in idom:
-            raise ValueError("Broken path in condensed graph")
+            raise ValueError("Broken path in graph logic")
         curr = idom[curr]
-    backbone_sccs.append(start_scc)
-    backbone_sccs.reverse()  # Order: [start_scc, ..., end_scc]
-    backbone_to_rank_map = {scc: i for i, scc in enumerate(backbone_sccs)}
+    backbone_nodes.append(START)
+    backbone_nodes.reverse()  # Order: [START, ..., END]
 
-    # --- 4. Partitioning Non-Backbone SCCs ---
-    # We assign every non-mandatory SCC to the bucket of its closest mandatory dominator.
-    # Because it is a DAG, if M_i dominates X, X must appear "after" M_i.
-    # Since M_i dominates M_{i+1}, and M_{i+1} does NOT dominate X (otherwise X would be
-    # anchored to M_{i+1}), X is strictly between M_i and M_{i+1} (or on a dead branch off M_i).
+    # Map backbone nodes to their rank (index in the backbone list)
+    backbone_rank = {node: i for i, node in enumerate(backbone_nodes)}
 
-    scc_to_backbone_idx = {}
+    # --- 3. Initial Partitioning (Granular Stages) ---
+    # We group every node to its closest backbone dominator.
+    # Logic: If 'B' is a backbone node, it owns all nodes 'n' where
+    # 'B' is the lowest backbone ancestor of 'n' in the dominator tree.
 
-    for scc in G_condensed.nodes():
-        if scc in backbone_to_rank_map:
-            scc_to_backbone_idx[scc] = backbone_to_rank_map[scc]
-        else:
-            # Walk up dominator tree until we hit a backbone node
-            runner = scc
-            while runner not in backbone_to_rank_map:
-                if runner not in idom:
-                    # Should be unreachable code given pruning
-                    raise ValueError("Broken path in condensed graph")
-                runner = idom[runner]
-            scc_to_backbone_idx[scc] = backbone_to_rank_map[runner]
+    # Bucket for intermediate nodes between backbone_nodes[i] and backbone_nodes[i+1]
+    intermediate_buckets = {i: set() for i in range(len(backbone_nodes))}
 
-    # --- 5. Reconstruct the Stages (Flatten SCCs back to nodes) ---
-    final_stages = []
-    is_skippable = []
+    for node in subgraph.nodes():
+        if node in backbone_rank:
+            continue
 
-    # Invert the mapping to get nodes back from SCC IDs
-    scc_members = defaultdict(list)
-    for node, scc_id in node_to_scc_mapping.items():
-        scc_members[scc_id].append(node)
+        # Climb up dominator tree to find which backbone node owns this node
+        runner = node
+        while runner not in backbone_rank:
+            if runner not in idom:
+                # Should not happen given pruning
+                raise ValueError(f"Node {node} is detached from dominator tree")
+            runner = idom[runner]
 
-    for i, mand_scc in enumerate(backbone_sccs):
-        # A. Add the Mandatory Stage (Bottleneck)
-        stage_nodes = set(scc_members[mand_scc])
-        final_stages.append(stage_nodes)
-        is_skippable.append(False)
+        owner_idx = backbone_rank[runner]
+        intermediate_buckets[owner_idx].add(node)
 
-        # B. Check for Intermediate Stage (between i and i+1)
-        if i < len(backbone_sccs) - 1:
-            next_mand_scc = backbone_sccs[i + 1]
+    # Construct the raw list of stages
+    # Pattern: [ {Backbone_i}, {Intermediate_Nodes_for_i} ... ]
+    raw_stages = []
 
-            # 1. Collect nodes strictly between mand_scc and next_mand_scc
-            intermediate_nodes = set()
-            for scc in G_condensed.nodes():
-                if scc != mand_scc and scc_to_backbone_idx.get(scc) == i:
-                    for node in scc_members[scc]:
-                        intermediate_nodes.add(node)
+    # We will track skippability for the raw stages.
+    # Only intermediate stages can be skippable (if edge exists Backbone_i -> Backbone_i+1)
+    raw_skippable = []
 
-            # 2. If intermediate nodes exist, add the stage
-            if intermediate_nodes:
-                final_stages.append(intermediate_nodes)
+    for i, b_node in enumerate(backbone_nodes):
+        # 1. Add Backbone Stage
+        raw_stages.append({b_node})
+        raw_skippable.append(False)  # Backbone nodes are never skippable
 
-                # 3. CHECK SKIPPABILITY
-                if G_condensed.has_edge(mand_scc, next_mand_scc):
-                    is_skippable.append(True)
+        # 2. Add Intermediate Stage (if it exists and we aren't at the very end)
+        if i < len(backbone_nodes) - 1:
+            inter_nodes = intermediate_buckets[i]
+            if inter_nodes:
+                raw_stages.append(inter_nodes)
+
+                # Check skippability: Can we go from b_node directly to next_b_node?
+                next_b_node = backbone_nodes[i + 1]
+                if subgraph.has_edge(b_node, next_b_node):
+                    raw_skippable.append(True)
                 else:
-                    is_skippable.append(False)
+                    raw_skippable.append(False)
 
-    return final_stages, is_skippable
+    # --- 4. Post-Processing: Merge Cycles ---
+    # A cycle might be split across multiple raw stages.
+    # Example: A -> B -> A. A is backbone. B is intermediate.
+    # Stages: [{A}, {B}]. Edge B->A is a back-edge from stage 1 to 0.
+    # We must merge any range [i, j] that contains a back-edge.
+
+    # Map every node to its raw stage index
+    node_to_stage_idx = {}
+    for idx, stage_set in enumerate(raw_stages):
+        for node in stage_set:
+            node_to_stage_idx[node] = idx
+
+    # Detect back-edges and collect merge intervals
+    merge_intervals = []
+
+    for u in subgraph.nodes():
+        u_idx = node_to_stage_idx[u]
+        for v in subgraph.successors(u):
+            v_idx = node_to_stage_idx[v]
+
+            # If edge goes backwards (or self-loop), it's part of a cycle/SCC
+            if v_idx <= u_idx:
+                # We must merge everything from v_idx to u_idx
+                if v_idx != u_idx:  # Ignore self-loops within a single stage
+                    merge_intervals.append((v_idx, u_idx))
+
+    # Merge overlapping intervals
+    if not merge_intervals:
+        merged_ranges = []
+    else:
+        merge_intervals.sort()  # Sort by start index
+        merged_ranges = []
+        if merge_intervals:
+            curr_start, curr_end = merge_intervals[0]
+            for next_start, next_end in merge_intervals[1:]:
+                if next_start <= curr_end:
+                    # Overlap or adjacent, extend current end
+                    curr_end = max(curr_end, next_end)
+                else:
+                    # Disjoint, push current and start new
+                    merged_ranges.append((curr_start, curr_end))
+                    curr_start, curr_end = next_start, next_end
+            merged_ranges.append((curr_start, curr_end))
+
+    # --- 5. Construct Final Stages ---
+    final_stages = []
+    final_skippable = []
+
+    current_raw_idx = 0
+    merge_ptr = 0
+
+    while current_raw_idx < len(raw_stages):
+        # Check if current index is the start of a merge range
+        if merge_ptr < len(merged_ranges) and current_raw_idx == merged_ranges[merge_ptr][0]:
+            start, end = merged_ranges[merge_ptr]
+
+            # Combine all stages from start to end
+            combined_set = set()
+            for k in range(start, end + 1):
+                combined_set.update(raw_stages[k])
+
+            final_stages.append(combined_set)
+            # A merged cycle is not skippable
+            final_skippable.append(False)
+
+            current_raw_idx = end + 1
+            merge_ptr += 1
+        else:
+            # No merge needed, keep as is
+            final_stages.append(raw_stages[current_raw_idx])
+            final_skippable.append(raw_skippable[current_raw_idx])
+            current_raw_idx += 1
+
+    return final_stages, final_skippable
