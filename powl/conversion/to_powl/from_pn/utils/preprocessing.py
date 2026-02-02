@@ -117,6 +117,8 @@ def remove_unconnected_places(
     return start_places, end_places
 
 
+
+
 def preprocess(net):
     all_places = net.places
     for p1, p2 in combinations(all_places, 2):
@@ -132,7 +134,62 @@ def preprocess(net):
         common_pre = pre1 & pre2
         common_post = post1 & post2
 
-        if len(common_pre) > 1:
+        if pre1 == pre2 and len(common_post) > 0:
+
+            new_place = PetriNet.Place(f"place_{next(id_generator())}")
+            net.places.add(new_place)
+
+            for transition in pre1:
+                add_arc_from_to(transition, new_place, net)
+                arcs_to_remove = p1.in_arcs | p2.in_arcs
+                for arc in arcs_to_remove:
+                    pn_util.remove_arc(net, arc)
+
+            for transition in common_post:
+                add_arc_from_to(new_place, transition, net)
+                out_arcs = p1.out_arcs | p2.out_arcs
+                for arc in out_arcs:
+                    if arc.target in common_post:
+                        pn_util.remove_arc(net, arc)
+
+            new_silent = PetriNet.Transition(
+                f"silent_transition_{next(id_generator())}"
+            )
+            net.transitions.add(new_silent)
+            add_arc_from_to(new_place, new_silent, net)
+            add_arc_from_to(new_silent, p1, net)
+            add_arc_from_to(new_silent, p2, net)
+            return preprocess(net)
+
+        elif post1 == post2 and len(common_pre) > 0:
+
+            new_place = PetriNet.Place(f"place_{next(id_generator())}")
+            net.places.add(new_place)
+
+            for transition in post1:
+                add_arc_from_to(new_place, transition, net)
+                arcs_to_remove = p1.out_arcs | p2.out_arcs
+                for arc in arcs_to_remove:
+                    pn_util.remove_arc(net, arc)
+
+            for transition in common_pre:
+                add_arc_from_to(transition, new_place, net)
+                in_arcs = p1.in_arcs | p2.in_arcs
+                for arc in in_arcs:
+                    if arc.source in common_pre:
+                        pn_util.remove_arc(net, arc)
+
+            new_silent = PetriNet.Transition(
+                f"silent_transition_{next(id_generator())}"
+            )
+            net.transitions.add(new_silent)
+            add_arc_from_to(p1, new_silent, net)
+            add_arc_from_to(p2, new_silent, net)
+            add_arc_from_to(new_silent, new_place, net)
+
+            return preprocess(net)
+
+        elif len(common_pre) > 1:
 
             new_place = PetriNet.Place(f"place_{next(id_generator())}")
             net.places.add(new_place)
@@ -144,14 +201,6 @@ def preprocess(net):
                     if arc.source in common_pre:
                         pn_util.remove_arc(net, arc)
 
-            if len(common_post) > 0:
-                for transition in common_post:
-                    add_arc_from_to(new_place, transition, net)
-                    out_arcs = p1.out_arcs | p2.out_arcs
-                    for arc in out_arcs:
-                        if arc.target in common_post:
-                            pn_util.remove_arc(net, arc)
-
             new_silent = PetriNet.Transition(
                 f"silent_transition_{next(id_generator())}"
             )
@@ -161,7 +210,7 @@ def preprocess(net):
             add_arc_from_to(new_silent, p2, net)
             return preprocess(net)
 
-        if len(common_post) > 1:
+        elif len(common_post) > 1:
 
             new_place = PetriNet.Place(f"place_{next(id_generator())}")
             net.places.add(new_place)
@@ -172,14 +221,6 @@ def preprocess(net):
                 for arc in out_arcs:
                     if arc.target in common_post:
                         pn_util.remove_arc(net, arc)
-
-            if len(common_pre) > 0:
-                for transition in common_pre:
-                    add_arc_from_to(transition, new_place, net)
-                    in_arcs = p1.in_arcs | p2.in_arcs
-                    for arc in in_arcs:
-                        if arc.source in common_pre:
-                            pn_util.remove_arc(net, arc)
 
             new_silent = PetriNet.Transition(
                 f"silent_transition_{next(id_generator())}"
