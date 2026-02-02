@@ -54,7 +54,7 @@ def __translate_petri_to_powl(
 
     reachability_map = get_simplified_reachability_graph(net)
 
-    partition = mine_partial_order(net, end_place, reachability_map)
+    partition = mine_partial_order(net, start_place, end_place, reachability_map)
     if len(partition) > 1:
         return __translate_partial_order(net, partition, start_place, end_place)
 

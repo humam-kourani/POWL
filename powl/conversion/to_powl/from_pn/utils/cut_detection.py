@@ -53,7 +53,7 @@ def mine_skip(
     return None
 
 
-def mine_partial_order(net, end_place, reachability_map):
+def mine_partial_order(net, start_place, end_place, reachability_map):
     partition = [{t} for t in net.transitions]
 
     for place in net.places:
@@ -69,6 +69,25 @@ def mine_partial_order(net, end_place, reachability_map):
                 xor_branches.append(new_branch)
             union_of_branches = set().union(*xor_branches)
             if place == end_place:
+                not_in_every_branch = union_of_branches
+            else:
+                intersection_of_branches = set.intersection(*xor_branches)
+                not_in_every_branch = union_of_branches - intersection_of_branches
+            if len(not_in_every_branch) > 1:
+                partition = __combine_parts(not_in_every_branch, partition)
+
+        in_size = len(place.in_arcs)
+        if in_size > 1 or (place == start_place and in_size > 0):
+            xor_branches = []
+            for end_transition in pn_util.pre_set(place):
+                new_branch = {
+                    key
+                    for key, value in reachability_map.items()
+                    if end_transition in value
+                }
+                xor_branches.append(new_branch)
+            union_of_branches = set().union(*xor_branches)
+            if place == start_place:
                 not_in_every_branch = union_of_branches
             else:
                 intersection_of_branches = set.intersection(*xor_branches)
