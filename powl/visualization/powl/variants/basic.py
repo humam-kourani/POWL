@@ -224,6 +224,7 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
             label = powl.activity
         else:
             label = powl.label
+        label = escape_for_html(label)
         if skip_order:
             if loop_order:
                 with importlib.resources.path(
@@ -298,7 +299,8 @@ def repr_powl(powl, viz, color_map, level, skip_order, loop_order):
                 fixedsize="true",
             )
         else:
-            label = f"<{str(powl.label)}"
+            label = escape_for_html(powl.label)
+            label = f"<{label}"
             if powl._role is not None and powl._organization is not None:
                 # Add a label to the box
                 label += f"""<br/><font color="grey" point-size="10">({powl._organization}, {powl._role})</font><br/>"""
@@ -580,3 +582,13 @@ def make_anchor(block, block_id):
         style="invis",
     )
     return anchor_id
+
+
+def escape_for_html(text: str) -> str:
+    if text is None:
+        return ""
+    return (str(text).replace("&", "&amp;")
+                     .replace("<", "&lt;")
+                     .replace(">", "&gt;")
+                     .replace('"', "&quot;")
+                     .replace("'", "&apos;"))
