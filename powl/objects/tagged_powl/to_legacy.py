@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from powl.objects.BinaryRelation import BinaryRelation
 from powl.objects.obj import POWL, SilentTransition, Transition, StrictPartialOrder, DecisionGraph, OperatorPOWL, \
-    Operator, FrequentTransition
+    Operator
 from powl.objects.tagged_powl.activity import Activity
 from powl.objects.tagged_powl.base import TaggedPOWL
 from powl.objects.tagged_powl.choice_graph import ChoiceGraph
@@ -21,14 +21,6 @@ def convert_tagged_powl_to_legacy_model(model: TaggedPOWL) -> POWL:
 
     def rec(n: TaggedPOWL):
 
-        if isinstance(n, Activity):
-            if n.is_silent():
-                return SilentTransition()
-            if n.is_repeatable() or n.is_skippable():
-                max_f = '-' if n.is_repeatable() else 1
-                return FrequentTransition(label=n.label, min_freq=n.min_freq, max_freq=max_f)
-            return Transition(n.label)
-
         if n.is_repeatable():
             if n.is_skippable():
                 body = rec(_strip_freq(n))
@@ -45,6 +37,11 @@ def convert_tagged_powl_to_legacy_model(model: TaggedPOWL) -> POWL:
                 children=[body, SilentTransition()],
             )
             return xor
+
+        if isinstance(n, Activity):
+            if n.is_silent():
+                return SilentTransition()
+            return Transition(n.label)
 
         if isinstance(n, PartialOrder):
             new_nodes = list(n.get_nodes())
